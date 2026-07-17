@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-do List</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="Index.js" defer></script>
+</head>
+
+<body>
+    <header>
+        <div class="header-top"> <!-- Added a class name -->
+            <h1>To-do List</h1>
+            <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
+        </div>
+        <nav>
+            <a href="#" id="tasks">Tasks</a>
+            <a href="#" id="done">Completed</a>
+            <a href="#" id="bin">Deleted</a>
+        </nav>
+        <hr>
+    </header>
+    <main>
+        <div class="task_container pending">
+            <ul class="task_list"></ul>
+        </div>
+        <button id="add">+ Task</button>
+        <div class="task_container completed">
+            <ul class="task_list"></ul>
+        </div>
+        <div class="task_container deleted">
+            <ul class="task_list"></ul>
+        </div>
+    </main>
+    <footer>
+        <h3>&copy; Copyright <span id="year"></span></h3>
+    </footer>
+
+</body>
+
+</html>
