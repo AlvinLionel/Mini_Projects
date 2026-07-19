@@ -18,6 +18,7 @@ const showDiv = (show) => {
 
     show.style.display = "block";
     addButton.style.display = show === taskDiv ? "block" : "none";
+    search.value="";
 };
 
 const createTaskElement = () => {
@@ -35,10 +36,9 @@ const createTaskElement = () => {
     const taskInput = document.createElement("input");
     taskInput.type = "text";
     taskInput.name = "task";
-    taskInput.classList.add("task-input");  // Check if this class name is of value and does anything
 
     const binButton = document.createElement("button");
-    binButton.type = "button";  //Is it necessary to add the button type, why not just leave it as is
+    binButton.type = "button";
     binButton.classList.add("bin");
     binButton.innerHTML = '<img src="media/close.png" alt="Delete">';
 
@@ -88,7 +88,7 @@ const createTaskElement = () => {
 const addTask = () => {
     const task = createTaskElement();
     taskLists[0].appendChild(task);
-    task.querySelector(".task-input").focus();
+    task.querySelector("input[type='text']").focus();
     saveTasks();
 };
 const toggleTheme = () => {
@@ -105,7 +105,7 @@ const saveTasks = () => {
     const tasksData = Array.from(taskLists).map(list =>
         Array.from(list.children).map(task => {
             return {
-                text: task.querySelector(".task-input").value,
+                text: task.querySelector("input[type='text']").value,
                 checked: task.querySelector("input[type='checkbox']").checked,
                 listIndex: Array.from(taskLists).indexOf(list)
             };
@@ -118,13 +118,26 @@ const loadTasks = () => {
     tasksData.forEach((list, listIndex) => {
         list.forEach(taskObj => {
             const task = createTaskElement();
-            task.querySelector(".task-input").value = taskObj.text;
+            task.querySelector("input[type='text']").value = taskObj.text;
             task.querySelector("input[type='checkbox']").checked = taskObj.checked;
             taskLists[listIndex].appendChild(task);
         });
     });
 };
+const search = document.getElementById("search");
+search.addEventListener("input", () => {
+    const query = search.value.toLowerCase();
 
+    const visibleList = Array.from(taskLists).find(list => {
+        return list.parentElement.style.display === "block";
+    });
+    if (visibleList) {
+        Array.from(visibleList.children).forEach(task => {
+            const text = task.querySelector("input[type='text']").value.toLowerCase();
+            task.style.display = text.includes(query) ? "block" : "none";
+        });
+    }
+});
 
 addButton.addEventListener("click", addTask);
 themeToggle.addEventListener("click", toggleTheme);
@@ -135,4 +148,3 @@ showDeletes.addEventListener("click", () => showDiv(binDiv));
 
 showDiv(taskDiv);
 loadTasks();
-// For the theme toggle attribute, is it default to use the data-theme attribute to switch meaning the media query is not needed or its the automatic side and the attribute is the manual
