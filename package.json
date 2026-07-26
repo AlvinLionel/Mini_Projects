@@ -1,0 +1,25 @@
+{
+  "name": "mini_projects",
+  "version": "1.0.0",
+  "description": "Contains all the mini projects I've worked on or collaborated in.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlvinLionel/Mini_Projects.git"
+  },
+  "keywords": [],
+  "author": "Alvin Lionel",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/AlvinLionel/Mini_Projects/issues"
+  },
+  "homepage": "https://github.com/AlvinLionel/Mini_Projects#readme",
+  "dependencies": {
+    "date-fns": "^4.4.0",
+    "uuid": "^14.0.1"
+  }
+}
