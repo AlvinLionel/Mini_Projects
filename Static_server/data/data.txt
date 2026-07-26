@@ -1,0 +1,14 @@
+ID: 1
+Name: Alvin
+Email: alvin@example.com
+Role: admin
+
+ID: 2
+Name: Lionel
+Email: lionel@example.com
+Role: editor
+
+ID: 3
+Name: Thumi
+Email: thumi@example.com
+Role: viewer

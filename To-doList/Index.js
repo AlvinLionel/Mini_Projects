@@ -111,7 +111,7 @@ const saveTasks = () => {
             };
         })
     );
-    localStorage.setItem("tasks", JSON.stringify(tasksData));
+    localStorage.setItem("tasks", JSON.stringify(tasksData))
 };
 const loadTasks = () => {
     const tasksData = JSON.parse(localStorage.getItem("tasks")) || [];
