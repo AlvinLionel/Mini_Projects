@@ -36,3 +36,16 @@ CREATE TABLE IF NOT EXISTS callbacks (
 CREATE INDEX idx_checkout_request_id ON transactions(checkout_request_id);
 CREATE INDEX idx_phone_number ON transactions(phone_number);
 CREATE INDEX idx_product_id ON transactions(product_id);
+
+ALTER TABLE products
+ADD stock INT NOT NULL DEFAULT 0; 
+
+INSERT INTO products (name, price, description, stock)
+VALUES
+  ('Book', 500.00, 'Sample book product', 20),
+  ('Headphones', 1500.00, 'Sample headphones product', 15),
+  ('Shoes', 2500.00, 'Sample shoes product', 10);
+
+DESCRIBE products;
+SELECT * FROM products;
+SELECT * FROM transactions;

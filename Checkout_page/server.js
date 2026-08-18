@@ -15,7 +15,7 @@ const consumerKey = process.env.CONSUMER_KEY;
 const consumerSecret = process.env.CONSUMER_SECRET;
 const shortCode = process.env.SHORTCODE;
 const passKey = process.env.PASSKEY;
-const callbackUrl = process.env.CALLBACK_URL || "https://decimal-laxative-antibody.ngrok-free.dev/callback";
+const callbackUrl = process.env.CALLBACK_URL;
 
 const db = mysql.createPool({
   host: process.env.DB_HOST,
@@ -96,8 +96,7 @@ app.post("/stkpush", async (req, res) => {
     res.json(stkRes.data);
   } catch (error) {
     if (error.response) {
-      console.error("Safaricom Error:", error.response.data);
-      console.error("Full error object:", {
+      console.error("Safaricom error. Full error object:", {
         status: error.response.status,
         headers: error.response.headers,
         data: error.response.data
