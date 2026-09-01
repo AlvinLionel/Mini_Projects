@@ -12,6 +12,8 @@ const weatherData = {
     humidity: null,
     wind: null,
     forecast: [],
+    dailyChartData: [],
+    selectedDayIndex: 0,
     hourly: {
         labels: [],
         temperatures: []
@@ -103,15 +105,45 @@ function getVisibilityStatus(value) {
     return "Poor";
 }
 
+function setSelectedForecastDay(index) {
+    if (!weatherData.forecast[index]) return;
+
+    weatherData.selectedDayIndex = index;
+    const forecastCards = document.querySelectorAll(".forecast-day");
+    forecastCards.forEach((card, cardIndex) => {
+        card.classList.toggle("today", cardIndex === index);
+    });
+
+    const chartEl = document.querySelector(".chart");
+    if (chartEl) {
+        chartEl.classList.toggle("selected-day-chart", true);
+    }
+
+    const selectedDayData = weatherData.dailyChartData[index] || {
+        labels: [],
+        temperatures: []
+    };
+
+    weatherData.hourly = {
+        labels: selectedDayData.labels,
+        temperatures: selectedDayData.temperatures
+    };
+
+    drawTemperatureChart();
+}
+
 function updateForecast(forecast) {
     const forecastContainer = document.querySelector(".forecast-grid");
     forecastContainer.innerHTML = "";
 
     forecast.forEach((day, index) => {
-        const forecastCard = document.createElement("div");
+        const forecastCard = document.createElement("button");
+        forecastCard.type = "button";
         forecastCard.classList.add("forecast-day");
 
-        if (index === 0) forecastCard.classList.add("today");
+        if (index === weatherData.selectedDayIndex) {
+            forecastCard.classList.add("today");
+        }
 
         forecastCard.innerHTML = `
         <span class="day">${day.day}</span>
@@ -128,6 +160,8 @@ function updateForecast(forecast) {
                 ${day.low}°
             </span>
             `;
+
+        forecastCard.addEventListener("click", () => setSelectedForecastDay(index));
         forecastContainer.appendChild(forecastCard);
     });
 }
@@ -137,8 +171,14 @@ function drawTemperatureChart() {
     const ctx = canvas.getContext("2d");
 
     const temperatures = weatherData.hourly.temperatures;
-    const labels = weatherData.hourly.labels;
+    let labels = weatherData.hourly.labels;
     if (!temperatures || temperatures.length === 0) return;
+
+    const maxVisibleLabels = 6;
+    const step = Math.max(1, Math.ceil(labels.length / maxVisibleLabels));
+    const visibleIndexes = labels.map((_, index) => index).filter((index) => index % step === 0 || index === labels.length - 1);
+    labels = visibleIndexes.map(index => labels[index]);
+    const visibleTemperatures = visibleIndexes.map(index => temperatures[index]);
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -155,12 +195,12 @@ function drawTemperatureChart() {
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingBottom - paddingTop;
 
-    const maxTemp = Math.max(...temperatures) + 2;
-    const minTemp = Math.min(...temperatures) - 2;
+    const maxTemp = Math.max(...visibleTemperatures) + 2;
+    const minTemp = Math.min(...visibleTemperatures) - 2;
 
     function getX(index) {
         return (
-            paddingLeft + (index / (temperatures.length - 1)) * chartWidth
+            paddingLeft + (index / (visibleTemperatures.length - 1)) * chartWidth
         );
     }
     function getY(temp) {
@@ -170,7 +210,7 @@ function drawTemperatureChart() {
     }
     ctx.clearRect(0, 0, width, height);
 
-    const points = temperatures.map(
+    const points = visibleTemperatures.map(
         (temp, index) => ({
             x: getX(index),
             y: getY(temp),
@@ -258,20 +298,24 @@ function drawTemperatureChart() {
 
 async function fetchWeatherForLocation(latitude, longitude, displayCity) {
     try {
-        const weatherResponse = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,surface_pressure,wind_speed_10m,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`
-        );
+        const [weatherResponse, airQualityResponse] = await Promise.all([
+            fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,surface_pressure,wind_speed_10m,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`
+            ),
+            fetch(
+                `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=auto`
+            )
+        ]);
+
         if (!weatherResponse.ok) throw new Error("Could not retrieve weather data");
-
-        const weather = await weatherResponse.json();
-        console.log("Weather data:", weather);
-
-        const airQualityResponse = await fetch(
-            `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=auto`
-        );
         if (!airQualityResponse.ok) throw new Error("Could not retrieve air quality data.");
 
-        const airQualityData = await airQualityResponse.json();
+        const [weather, airQualityData] = await Promise.all([
+            weatherResponse.json(),
+            airQualityResponse.json()
+        ]);
+
+        console.log("Weather data:", weather);
 
         weatherData.city = displayCity;
         weatherData.temperature = Math.round(weather.current.temperature_2m);
@@ -286,6 +330,7 @@ async function fetchWeatherForLocation(latitude, longitude, displayCity) {
         weatherData.condition = getWeatherCondition(weather.current.weather_code);
         weatherData.icon = getWeatherIcon(weather.current.weather_code, weather.current.is_day);
         weatherData.forecast = [];
+        weatherData.dailyChartData = [];
 
         for (let i = 0; i < 6; i++) {
             weatherData.forecast.push({
@@ -296,29 +341,41 @@ async function fetchWeatherForLocation(latitude, longitude, displayCity) {
             });
         }
 
-        const currentHour = new Date().getHours();
-        const startIndex = weather.hourly.time.findIndex(time => {
-            const hour = new Date(time).getHours();
-            return hour === currentHour;
-        });
-        const safeStartIndex = startIndex === -1 ? 0 : startIndex;
-        const hourlyTemperatures = [];
-        const hourlyLabels = [];
+        weather.daily.time.forEach((dateString, dayIndex) => {
+            const dateKey = new Date(dateString).toISOString().slice(0, 10);
+            const dayTemps = [];
+            const dayLabels = [];
 
-        for (let i = safeStartIndex; i < safeStartIndex + 8 && i < weather.hourly.time.length; i++) {
-            hourlyTemperatures.push(Math.round(weather.hourly.temperature_2m[i]));
-            const hour = new Date(weather.hourly.time[i]);
-            hourlyLabels.push(
-                hour.toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    hour12: true
-                })
-            );
-        }
+            weather.hourly.time.forEach((timeString, timeIndex) => {
+                const hourDate = new Date(timeString);
+                const timeKey = hourDate.toISOString().slice(0, 10);
+
+                if (timeKey !== dateKey) return;
+
+                dayTemps.push(Math.round(weather.hourly.temperature_2m[timeIndex]));
+                dayLabels.push(
+                    hourDate.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        hour12: true
+                    })
+                );
+            });
+
+            weatherData.dailyChartData.push({
+                labels: dayLabels.length ? dayLabels : ["Now"],
+                temperatures: dayTemps.length ? dayTemps : [Math.round(weather.current.temperature_2m)]
+            });
+        });
+
+        weatherData.selectedDayIndex = 0;
+        const initialDayData = weatherData.dailyChartData[0] || {
+            labels: [],
+            temperatures: []
+        };
 
         weatherData.hourly = {
-            labels: hourlyLabels,
-            temperatures: hourlyTemperatures
+            labels: initialDayData.labels,
+            temperatures: initialDayData.temperatures
         };
 
         setDashboardLoadedState();
