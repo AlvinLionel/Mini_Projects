@@ -12,68 +12,37 @@
 <body>
     <div class="search-bar">
         <input type="search" name="search" id="search" placeholder="Search your city...">
-        <button class="search-logo">🔍</button>
+        <button class="location-button" type="button" id="use-location-button"> Use my location</button>
+        <button class="search-logo" type="button" aria-label="Search weather">🔍</button>
     </div>
-    <div class="weather-dashboard">
+
+    <div class="weather-dashboard" id="weather-dashboard">
+        <div class="empty-state" id="empty-state">
+            <p>Search a city to start</p>
+        </div>
+
         <section class="main-panel">
             <div class="location">
-                <h2 id="city-name">Nairobi, KE</h2>
-                <p id="date-time">Sunday, 19 July 2026</p>
+                <h2 id="city-name"></h2>
+                <p id="date-time"></p>
             </div>
 
             <div class="current-weather">
                 <div class="weather-summary">
-                    <div class="weather-icon" id="weather-icon">🌤️</div>
+                    <div class="weather-icon" id="weather-icon"></div>
                     <div class="temperature-block">
-                        <h1 id="temperature">25°C</h1>
+                        <h1 id="temperature"></h1>
                     </div>
                     <div class="condition-block">
-                        <h2 id="condition">Mostly sunny</h2>
-                        <p id="high-low">H 28° &nbsp; L 18°</p>
+                        <h2 id="condition"></h2>
+                        <p id="high-low"></p>
                     </div>
                 </div>
             </div>
 
             <div class="forecast">
                 <h3>5-Day Forecast</h3>
-                <div class="forecast-grid">
-                    <div class="forecast-day today">
-                        <span class="day">Today</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">26°</span>
-                        <span class="low">14°</span>
-                    </div>
-                    <div class="forecast-day">
-                        <span class="day">Mon 20</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">25°</span>
-                        <span class="low">13°</span>
-                    </div>
-                    <div class="forecast-day">
-                        <span class="day">Mon 20</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">25°</span>
-                        <span class="low">13°</span>
-                    </div>
-                    <div class="forecast-day">
-                        <span class="day">Mon 20</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">25°</span>
-                        <span class="low">13°</span>
-                    </div>
-                    <div class="forecast-day">
-                        <span class="day">Mon 20</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">25°</span>
-                        <span class="low">13°</span>
-                    </div>
-                    <div class="forecast-day">
-                        <span class="day">Mon 20</span>
-                        <span class="weather-icon">🌤️</span>
-                        <span class="high">25°</span>
-                        <span class="low">13°</span>
-                    </div>
-                </div>
+                <div class="forecast-grid"></div>
             </div>
 
             <div class="chart">
@@ -87,10 +56,10 @@
                     <h4>Visibility</h4>
                 </div>
                 <div class="card-value">
-                    <strong id="visibility">10</strong>
+                    <strong id="visibility"></strong>
                     <span>km</span>
                 </div>
-                <p class="status" id="visibility-status">Excellent</p>
+                <p class="status" id="visibility-status"></p>
 
                 <div class="visibility-bars">
                     <span></span>
@@ -102,28 +71,26 @@
             </div>
             <div class="card">
                 <h4>Pressure</h4>
-                <p id="pressure">1015 hPa</p>
+                <p id="pressure"></p>
             </div>
             <div class="card">
                 <h4>AQI</h4>
-                <p id="aqi">Good (42)</p>
+                <p id="aqi"></p>
             </div>
             <div class="card">
                 <h4>UV Index</h4>
-                <p id="uv">5 (Moderate)</p>
+                <p id="uv"></p>
             </div>
             <div class="card">
                 <h4>Wind</h4>
-                <p id="wind">12 km/h</p>
+                <p id="wind"></p>
             </div>
             <div class="card">
                 <h4>Humidity</h4>
-                <p id="humidity">65%</p>
+                <p id="humidity"></p>
             </div>
         </aside>
-
     </div>
-
 </body>
 
 </html>

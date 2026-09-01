@@ -13,13 +13,14 @@ body {
 }
 
 .search-bar {
-    width: min(445px, 90%);
+    width: min(470px, 90%);
     height: 64px;
     margin: 0 auto 14px;
     display: flex;
     align-items: center;
     background: #1a1c3b;
     border-radius: 14px;
+    padding-right: 10px;
 }
 
 .search-bar input {
@@ -32,10 +33,28 @@ body {
     font-size: 18px;
 }
 
+.location-button {
+    background: #23265a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #e9ecff;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s ease;
+    white-space: nowrap;
+}
+
+.location-button:hover {
+    background: #2c315f;
+    transform: translateY(-1px);
+}
+
 .search-logo {
     width: 54px;
     height: 54px;
-    margin-right: 5px;
+    margin-left: 8px;
     background: transparent;
     border: none;
     border-radius: 11px;
@@ -59,6 +78,31 @@ body {
     background: #101225;
     border-radius: 24px;
     padding: 20px;
+}
+
+.weather-dashboard.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+}
+
+.weather-dashboard.empty .main-panel,
+.weather-dashboard.empty .info-panel {
+    display: none;
+}
+
+.empty-state {
+    display: none;
+    text-align: center;
+    color: #dfe4ff;
+    font-size: clamp(1.3rem, 2vw, 2rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.weather-dashboard.empty .empty-state {
+    display: block;
 }
 
 .main-panel {

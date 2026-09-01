@@ -1,81 +1,27 @@
 const weatherData = {
-    city: "nairobi, KE",
-    condition: "Mostly Sunny",
-    temperature: 25,
-    high: 28,
-    low: 18,
-    icon: "🌤️",
-    visibility: 10,
-    pressure: 1015,
-    aqi: 42,
-    uv: 5,
-    humidity: 65,
-    wind: 12,
-    forecast: [
-        {
-            day: "Today",
-            icon: "🌤️",
-            high: 26,
-            low: 14
-        },
-        {
-            day: "Mon 20",
-            icon: "🌤️",
-            high: 25,
-            low: 13
-        },
-        {
-            day: "Tue 21",
-            icon: "🌧️",
-            high: 22,
-            low: 13
-        },
-        {
-            day: "Wed 22",
-            icon: "☀️",
-            high: 27,
-            low: 15
-        },
-        {
-            day: "Thu 23",
-            icon: "⛅",
-            high: 24,
-            low: 14
-        },
-        {
-            day: "Fri 24",
-            icon: "🌦️",
-            high: 23,
-            low: 14
-        }
-    ],
+    city: "",
+    condition: "",
+    temperature: null,
+    high: null,
+    low: null,
+    icon: "",
+    visibility: null,
+    pressure: null,
+    aqi: null,
+    uv: null,
+    humidity: null,
+    wind: null,
+    forecast: [],
     hourly: {
-        labels: [
-            "4 PM",
-            "7 PM",
-            "10 PM",
-            "1 AM",
-            "4 AM",
-            "7 AM",
-            "10 AM",
-            "1 PM"
-        ],
-
-        temperatures: [
-            26,
-            24,
-            20,
-            17,
-            15,
-            14,
-            19,
-            23
-        ]
+        labels: [],
+        temperatures: []
     }
 };
 
 const searchInput = document.getElementById("search");
 const searchButton = document.querySelector(".search-logo");
+const useLocationButton = document.getElementById("use-location-button");
+const dashboard = document.getElementById("weather-dashboard");
 
 const cityName = document.getElementById("city-name");
 const dateTime = document.getElementById("date-time");
@@ -92,6 +38,14 @@ const wind = document.getElementById("wind");
 const humidity = document.getElementById("humidity");
 
 const visibilityStatus = document.getElementById("visibility-status");
+
+function setDashboardEmptyState() {
+    dashboard.classList.add("empty");
+}
+
+function setDashboardLoadedState() {
+    dashboard.classList.remove("empty");
+}
 
 function updateDateTime() {
     const now = new Date();
@@ -302,6 +256,84 @@ function drawTemperatureChart() {
     );
 }
 
+async function fetchWeatherForLocation(latitude, longitude, displayCity) {
+    try {
+        const weatherResponse = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,surface_pressure,wind_speed_10m,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`
+        );
+        if (!weatherResponse.ok) throw new Error("Could not retrieve weather data");
+
+        const weather = await weatherResponse.json();
+        console.log("Weather data:", weather);
+
+        const airQualityResponse = await fetch(
+            `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=auto`
+        );
+        if (!airQualityResponse.ok) throw new Error("Could not retrieve air quality data.");
+
+        const airQualityData = await airQualityResponse.json();
+
+        weatherData.city = displayCity;
+        weatherData.temperature = Math.round(weather.current.temperature_2m);
+        weatherData.high = Math.round(weather.daily.temperature_2m_max[0]);
+        weatherData.low = Math.round(weather.daily.temperature_2m_min[0]);
+        weatherData.humidity = weather.current.relative_humidity_2m;
+        weatherData.pressure = Math.round(weather.current.surface_pressure);
+        weatherData.wind = Math.round(weather.current.wind_speed_10m);
+        weatherData.visibility = Math.round(weather.current.visibility / 1000);
+        weatherData.uv = Math.round(weather.daily.uv_index_max[0]);
+        weatherData.aqi = Math.round(airQualityData.current.us_aqi);
+        weatherData.condition = getWeatherCondition(weather.current.weather_code);
+        weatherData.icon = getWeatherIcon(weather.current.weather_code, weather.current.is_day);
+        weatherData.forecast = [];
+
+        for (let i = 0; i < 6; i++) {
+            weatherData.forecast.push({
+                day: formatForecastDay(weather.daily.time[i], i),
+                icon: getWeatherIcon(weather.daily.weather_code[i], true),
+                high: Math.round(weather.daily.temperature_2m_max[i]),
+                low: Math.round(weather.daily.temperature_2m_min[i])
+            });
+        }
+
+        const currentHour = new Date().getHours();
+        const startIndex = weather.hourly.time.findIndex(time => {
+            const hour = new Date(time).getHours();
+            return hour === currentHour;
+        });
+        const safeStartIndex = startIndex === -1 ? 0 : startIndex;
+        const hourlyTemperatures = [];
+        const hourlyLabels = [];
+
+        for (let i = safeStartIndex; i < safeStartIndex + 8 && i < weather.hourly.time.length; i++) {
+            hourlyTemperatures.push(Math.round(weather.hourly.temperature_2m[i]));
+            const hour = new Date(weather.hourly.time[i]);
+            hourlyLabels.push(
+                hour.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    hour12: true
+                })
+            );
+        }
+
+        weatherData.hourly = {
+            labels: hourlyLabels,
+            temperatures: hourlyTemperatures
+        };
+
+        setDashboardLoadedState();
+        updateCurrentWeather(weatherData);
+        updateForecast(weatherData.forecast);
+        drawTemperatureChart();
+        updateDateTime();
+
+        console.log("Dashboard updated successfully");
+    } catch (error) {
+        console.error("Weather request failed:", error);
+        alert("Something went wrong while fetching weather data.");
+    }
+}
+
 async function searchWeather() {
     const city = searchInput.value.trim();
 
@@ -324,83 +356,47 @@ async function searchWeather() {
             alert("City not found.");
             return;
         }
+
         const location = locationData.results[0];
-        console.log("Location:", location);
+        const displayCity = `${location.name}, ${location.country_code}`;
 
-        const latitude = location.latitude;
-        const longitude = location.longitude;
-
-        const weatherResponse = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,surface_pressure,wind_speed_10m,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`
-        );
-        if (!weatherResponse.ok) throw new Error("Could not retrieve weather data");
-
-        const weather = await weatherResponse.json();
-        console.log("Weather data:", weather);
-
-        const airQualityResponse = await fetch(
-            `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=auto`
-        );
-        if (!airQualityResponse.ok) throw new Error("Could not retrieve air quality data.");
-
-        const airQualityData = await airQualityResponse.json();
-
-        weatherData.city = `${location.name}, ${location.country_code}`;
-        weatherData.temperature = Math.round(weather.current.temperature_2m);
-        weatherData.humidity = weather.current.relative_humidity_2m;
-        weatherData.pressure = Math.round(weather.current.surface_pressure);
-        weatherData.wind = Math.round(weather.current.wind_speed_10m);
-        weatherData.visibility = Math.round(weather.current.visibility / 1000);
-        weatherData.uv = Math.round(weather.daily.uv_index_max[0]);
-        weatherData.aqi = Math.round(airQualityData.current.us_aqi);
-        weatherData.condition = getWeatherCondition(weather.current.weather_code);
-        weatherData.icon = getWeatherIcon(weather.current.weather_code, weather.current.is_day);
-
-        weatherData.forecast = [];
-
-        for (let i = 0; i < 6; i++) {
-            weatherData.forecast.push({
-                day: formatForecastDay(weather.daily.time[i], i),
-                icon: getWeatherIcon(weather.daily.weather_code[i], true),
-                high: Math.round(weather.daily.temperature_2m_max[i]),
-                low: Math.round(weather.daily.temperature_2m_min[i])
-            });
-        }
-        const currentHour = new Date().getHours();
-        const startIndex = weather.hourly.time.findIndex(time => {
-            const hour = new Date(time).getHours();
-            return hour === currentHour;
-        });
-        const safeStartIndex = startIndex === -1 ? 0 : startIndex;
-        const hourlyTemperatures = [];
-        const hourlyLabels = [];
-
-        for (let i = safeStartIndex; i < safeStartIndex + 8 && i < weather.hourly.time.length; i++) {
-            hourlyTemperatures.push(Math.round(weather.hourly.temperature_2m[i]));
-            const hour = new Date(weather.hourly.time[i]);
-            hourlyLabels.push(
-                hour.toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    hour12: true
-                })
-            );
-        }
-        weatherData.hourly = {
-            labels: hourlyLabels,
-            temperatures: hourlyTemperatures
-        };
-
-        updateCurrentWeather(weatherData);
-        updateForecast(weatherData.forecast);
-        drawTemperatureChart();
-        updateDateTime();
-
-        console.log("Dashboard updated successfully");
-
+        await fetchWeatherForLocation(location.latitude, location.longitude, displayCity);
     } catch (error) {
         console.error("Weather search failed:", error);
         alert("Something went wrong while searching for the city.");
     }
+}
+
+async function getMyLocationWeather() {
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by this browser.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+
+        try {
+            const reverseGeocodeResponse = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`
+            );
+
+            if (!reverseGeocodeResponse.ok) {
+                throw new Error("Could not resolve your city name");
+            }
+
+            const reverseData = await reverseGeocodeResponse.json();
+            const address = reverseData.address || {};
+            const cityName = address.city || address.town || address.village || address.county || address.state || "My Location";
+
+            await fetchWeatherForLocation(latitude, longitude, cityName);
+        } catch (error) {
+            console.error("Location lookup failed:", error);
+            alert("We could not load weather for your current location.");
+        }
+    }, () => {
+        alert("Please allow location access to use your current location.");
+    });
 }
 function getWeatherCondition(code) {
     if (code === 0) return "Clear sky";
@@ -455,17 +451,20 @@ function formatForecastDay(dateString, index) {
 }
 
 searchButton.addEventListener("click", searchWeather);
+useLocationButton.addEventListener("click", getMyLocationWeather);
 searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchWeather();
-})
+});
 
 function initializeDashboard() {
+    setDashboardEmptyState();
     updateDateTime();
-    updateCurrentWeather(weatherData);
-    updateForecast(weatherData.forecast);
-    drawTemperatureChart();
 }
 
-window.addEventListener("resize", drawTemperatureChart);
+window.addEventListener("resize", () => {
+    if (!dashboard.classList.contains("empty")) {
+        drawTemperatureChart();
+    }
+});
 
 initializeDashboard();
