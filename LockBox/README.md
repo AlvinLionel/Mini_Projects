@@ -1,0 +1,1 @@
+A platform offering security services, encryption of files and decryption.
