@@ -107,8 +107,7 @@ button {
     background: #65e6a0;
 }
 
-/* MAIN */
-
+/******** INTRO *********/
 .workspace {
     position: relative;
     z-index: 1;
@@ -160,6 +159,7 @@ button {
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
 }
 
+/******** MODES *********/
 .mode-selector {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -252,7 +252,7 @@ button {
     margin-bottom: 14px;
 }
 
-
+/******** RESOURCES *********/
 .resource-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -291,10 +291,8 @@ button {
 
 .resource-card.selected {
     border-color: rgba(120, 180, 255, 0.55);
-    background: rgba(120, 180, 255, 0.08);
-    box-shadow:
-        inset 0 0 0 1px rgba(120, 180, 255, 0.08),
-        0 0 18px rgba(120, 180, 255, 0.05);
+    background: #78b4ff14;
+    box-shadow: inset 0 0 0 1px #78b4ff14, 0 0 18px #78b4ff0d;
 }
 
 .resource-icon {
@@ -351,6 +349,7 @@ button {
     font-weight: 700;
 }
 
+/******** TEXT INPUT *********/
 .text-input {
     width: 100%;
     height: 265px;
@@ -374,6 +373,7 @@ button {
     color: #454b56;
 }
 
+/******** DROP ZONE *********/
 .drop-zone {
     height: 265px;
     display: flex;
@@ -384,6 +384,13 @@ button {
     border-radius: 7px;
     background: rgba(4, 6, 10, 0.5);
     text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.drop-zone.dragging {
+    border-style: solid;
+    transform: scale(1.01);
 }
 
 .upload-icon {
@@ -419,6 +426,22 @@ button {
     font-size: 10px;
 }
 
+.upload-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 80, 80, 0.35);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.upload-error span {
+    font-size: 0.85rem;
+}
+
+/******** ALGORITHMS *********/
 .algorithm-catalog {
     display: flex;
     flex-direction: column;
@@ -612,6 +635,7 @@ button {
     border-color: inherit;
 }
 
+/******** ERROR TEXT *********/
 .unsupported-reason {
     display: block;
     margin-top: 5px;
@@ -626,6 +650,7 @@ button {
     margin-bottom: 10px;
 }
 
+/******** SECRET KEY *********/
 .password-input {
     display: flex;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -668,9 +693,7 @@ button {
     padding: 14px;
     border: 1px solid rgba(132, 144, 255, 0.5);
     border-radius: 6px;
-    background: linear-gradient(135deg,
-            rgba(101, 116, 255, 0.22),
-            rgba(101, 116, 255, 0.08));
+    background: linear-gradient(135deg, #6574ff38, #6574ff14);
     color: #dce0ff;
     font-family: "Space Mono", monospace;
     font-size: 10px;
@@ -682,6 +705,28 @@ button {
     border-color: #8792ff;
     background: rgba(119, 135, 255, 0.18);
     box-shadow: 0 0 25px rgba(119, 135, 255, 0.12);
+}
+
+.primary-action:disabled {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.35);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.primary-action:disabled:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+}
+
+.action-reason {
+    margin: 9px 0 0;
+    color: rgba(255, 180, 120, 0.78);
+    font-size: 9px;
+    line-height: 1.4;
+    text-align: center;
 }
 
 .keypair-section,
@@ -862,9 +907,7 @@ button {
     background: rgba(255, 255, 255, 0.09);
 }
 
-/* ================================
-   PROCESSING PANEL
-   ================================ */
+/******** PROCESSING DISPLAY *********/
 
 .processing-panel {
     position: relative;
@@ -888,6 +931,20 @@ button {
     background: rgba(120, 180, 255, 0.08);
     font-size: 20px;
     animation: processingPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes processingPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+
+    50% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
 }
 
 .processing-title {
@@ -966,20 +1023,46 @@ button {
     letter-spacing: 0.06em;
 }
 
-@keyframes processingPulse {
-
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 0.7;
-    }
-
-    50% {
-        transform: scale(1.08);
-        opacity: 1;
-    }
+/******** ERROR DISPLAY *********/
+.error-panel {
+    margin-top: 16px;
+    padding: 26px 20px;
+    border: 1px solid rgba(255, 100, 100, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 80, 80, 0.035);
+    text-align: center;
 }
 
+.error-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 14px;
+    border: 1px solid rgba(255, 100, 100, 0.25);
+    border-radius: 50%;
+    background: rgba(255, 80, 80, 0.06);
+    color: rgba(255, 150, 150, 0.95);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.error-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.error-description {
+    max-width: 320px;
+    margin: 8px auto 18px;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+/******** COMPLETION DISPLAY *********/
 .completion-panel {
     margin-top: 16px;
     padding: 26px 20px;
@@ -1029,6 +1112,7 @@ button {
     letter-spacing: 0.06em;
 }
 
+/******** RESULT DISPLAY *********/
 .result-container {
     margin-top: 20px;
     text-align: left;
@@ -1085,11 +1169,107 @@ button {
     border-color: rgba(120, 180, 255, 0.2);
     color: rgba(255, 255, 255, 0.85);
 }
+
 .result-action.done {
     border-color: rgba(150, 210, 180, 0.25);
     color: rgba(170, 225, 195, 0.9);
 }
 
+/******** PREVIEW *********/
+.decrypted-preview {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.file-info::before {
+    content: "✓";
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+}
+
+.file-info strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.file-info span {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+.preview-image {
+    display: block;
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 6px;
+}
+
+.preview-audio {
+    width: 100%;
+    height: 48px;
+    border-radius: 10px;
+}
+
+.preview-video {
+    display: block;
+    width: 100%;
+    max-height: 480px;
+    border-radius: 12px;
+    background: #000;
+    object-fit: contain;
+}
+
+.preview-text {
+    width: 100%;
+    height: 300px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+}
+
+.generic-file-preview {
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.generic-file-preview span {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+/******** DETAILS *********/
 .activity-panel {
     display: flex;
     align-items: center;
@@ -1153,6 +1333,7 @@ footer {
     letter-spacing: 0.12em;
 }
 
+/******** RESPONSIVENESS *********/
 @media (max-width: 800px) {
 
     .navbar nav,

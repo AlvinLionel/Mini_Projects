@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "../styles/App.css";
+import { encryptText, decryptText } from "../crypto/aes";
+import { createPackage, unpackage } from "../crypto/package";
+import { CryptoError } from "../crypto/error";
+import { type ResourceType, encryptFile, decryptFile, downloadFile } from "../crypto/resourceCrypto";
 
 type Mode = "encrypt" | "decrypt";
-type ResourceType = "text" | "file" | "image" | "audio" | "video" | "folder";
 
 type AlgorithmCategory = {
     id: string;
@@ -42,7 +45,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"]
             },
-
             {
                 id: "AES-256-CBC",
                 name: "AES-256-CBC",
@@ -54,7 +56,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"]
             },
-
             {
                 id: "AES-128-GCM",
                 name: "AES-128-GCM",
@@ -66,7 +67,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"],
             },
-
             {
                 id: "ChaCha20-Poly1305",
                 name: "ChaCha20-Poly1305",
@@ -78,7 +78,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"],
             },
-
             {
                 id: "XChaCha20-Poly1305",
                 name: "XChaCha20-Poly1305",
@@ -89,7 +88,7 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 keyType: "password",
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"]
-            },
+            }
         ] satisfies Algorithm[],
     },
 
@@ -110,7 +109,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text"],
             },
-
             {
                 id: "RSA-3072",
                 name: "RSA-3072",
@@ -122,7 +120,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "encryption",
                 supports: ["text"],
             },
-
             {
                 id: "RSA-4096",
                 name: "RSA-4096",
@@ -133,7 +130,7 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 keyType: "keypair",
                 operation: "encryption",
                 supports: ["text"],
-            },
+            }
         ] satisfies Algorithm[],
     },
 
@@ -154,7 +151,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 operation: "key-exchange",
                 supports: [],
             },
-
             {
                 id: "X25519",
                 name: "X25519",
@@ -165,7 +161,7 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 keyType: "keypair",
                 operation: "key-exchange",
                 supports: [],
-            },
+            }
         ] satisfies Algorithm[],
     },
 };
@@ -220,6 +216,14 @@ function App() {
     const [operationResult, setOperationResult] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [downloaded, setDownloaded] = useState(false);
+    const [resourceText, setResourceText] = useState("");
+    const [inputPassword, setInputPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [operationError, setOperationError] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [uploadError, setUploadError] = useState("");
+    const [decryptedFile, setDecryptedFile] = useState<File | null>(null);
 
     const selectedAlgorithmConfig =
         Object.values(algorithmCategories)
@@ -232,19 +236,48 @@ function App() {
             algorithm.supports.includes(selectedResource)
         );
 
-    useEffect(() => {
-        const isCurrentAlgorithmAvailable =
-            availableAlgorithms.some(algorithm => algorithm.id === selectedAlgorithm);
+    const hasResource = selectedResource === "text"
+        ? resourceText.trim().length > 0
+        : selectedFile !== null;
+    const resourceRequirementMessage = selectedResource === "text"
+        ? "Enter text before starting this operation."
+        : `Upload a ${resourceTypes[selectedResource].name.toLowerCase()} before starting this operation.`;
 
-        if (!isCurrentAlgorithmAvailable && availableAlgorithms.length > 0) {
-            const recommendedAlgorithm = availableAlgorithms.find(algorithm => algorithm.badgeType === "recommended"
-            );
+    const handleResourceChange = (resourceType: ResourceType) => {
+        const resourceAlgorithms = Object.values(algorithmCategories)
+            .flatMap(category => category.algorithms)
+            .filter(algorithm => algorithm.supports.includes(resourceType));
+        const isCurrentAlgorithmAvailable = resourceAlgorithms.some(algorithm => algorithm.id === selectedAlgorithm);
 
-            setSelectedAlgorithm(recommendedAlgorithm?.id ?? availableAlgorithms[0].id);
+        setSelectedResource(resourceType);
+
+        if (!isCurrentAlgorithmAvailable && resourceAlgorithms.length > 0) {
+            const recommendedAlgorithm = resourceAlgorithms.find(algorithm => algorithm.badgeType === "recommended");
+
+            setSelectedAlgorithm(recommendedAlgorithm?.id ?? resourceAlgorithms[0].id);
         }
-    }, [selectedResource, availableAlgorithms, selectedAlgorithm,]
-    );
+        setSelectedFile(null);
+        setUploadError("");
+    };
 
+    const ResourceIsValid = (file: File, resourceType: ResourceType): boolean => {
+        switch (resourceType) {
+            case "text":
+                return file.type.startsWith("text/");
+            case "image":
+                return file.type.startsWith("image/");
+            case "audio":
+                return file.type.startsWith("audio/");
+            case "video":
+                return file.type.startsWith("video/")
+            case "file":
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    {/************** PROCESSING DISPLAY DETAILS **************/ }
     const processingSteps = mode === "encrypt"
         ? [
             "Preparing resource",
@@ -281,6 +314,7 @@ function App() {
                 </div>
             </header>
             <main className="workspace">
+                {/**************INTRO **************/}
                 <section className="intro">
                     <div className="eyebrow">
                         <span>01</span> SECURE YOUR DATA
@@ -290,6 +324,7 @@ function App() {
                 </section>
 
                 <section className="crypto-workspace">
+                    {/**************MODES **************/}
                     <div className="mode-selector">
                         <button
                             className={mode === "encrypt" ? "mode active" : "mode"}
@@ -325,6 +360,7 @@ function App() {
                                 {mode === "encrypt" ? "What would you like to secure?" : "What would you like unlocked?"}
                             </label>
 
+                            {/**************RESOURCES **************/}
                             <div className="resource-grid">
                                 {(
                                     Object.entries(resourceTypes) as [
@@ -335,11 +371,9 @@ function App() {
                                     const isSelected = selectedResource === type;
 
                                     return (
-                                        <button
-                                            key={type}
-                                            type="button"
+                                        <button key={type} type="button"
                                             className={`resource-card ${isSelected ? "selected" : ""}`}
-                                            onClick={() => setSelectedResource(type)}
+                                            onClick={() => handleResourceChange(type)}
                                         >
                                             <span className="resource-icon">{resource.icon}</span>
 
@@ -357,17 +391,106 @@ function App() {
                             {selectedResource === "text" ? (
                                 <textarea className="text-input"
                                     placeholder={mode === "encrypt" ? "Enter the text you want secured..." : "Paste your encrypted text here..."}
+                                    value={resourceText}
+                                    onChange={(event) => setResourceText(event.target.value)}
                                 ></textarea>
                             ) : (
-                                <div className="drop-zone">
-                                    <div className="upload-icon">↑</div>
-                                    <strong>Drop your {selectedResource} here</strong>
-                                    <span>or click to browse your device</span>
-                                    <button className="browse-button">Browse files</button>
+                                /************** DROP ZONE **************/
+                                <div className={`drop-zone ${isDragging ? "dragging" : ""}`}
+                                    onClick={() => document.getElementById("resource-upload")?.click()}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(true);
+                                    }}
+                                    onDragLeave={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(false);
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(false);
+
+                                        const file = e.dataTransfer.files?.[0] ?? null;
+                                        if (!file) return;
+
+                                        if (!ResourceIsValid(file, selectedResource)) {
+                                            setUploadError(`You entered the wrong resource type`);
+                                            return;
+                                        }
+                                        setUploadError("");
+                                        setSelectedFile(file);
+                                    }}
+                                >
+                                    {selectedFile ? (
+                                        <>
+                                            <div className="upload-icon">✓</div>
+                                            <strong>{selectedFile.name}</strong>
+
+                                            <span>
+                                                {selectedFile.size >= 1024 * 1024
+                                                    ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
+                                                    : `${(selectedFile.size / 1024).toFixed(1)} KB`}
+                                            </span>
+
+                                            <button type="button" className="browse-button" onClick={() => {
+                                                document.getElementById("resource-upload")?.click();
+                                            }}
+                                            >
+                                                Change file
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="upload-icon">↑</div>
+                                            <strong>Drop your {selectedResource} here</strong>
+                                            <span>or click to browse your device</span>
+
+                                            <button type="button" className="browse-button" onClick={(e) => {
+                                                e.stopPropagation();
+                                                document.getElementById("resource-upload")?.click();
+                                            }}
+                                            >
+                                                {selectedFile ? "Change file" : "Browse files"}
+                                            </button>
+                                        </>
+                                    )}
+
+                                    <input type="file" id="resource-upload" hidden
+                                        accept={
+                                            selectedResource === "image"
+                                                ? "image/*"
+                                                : selectedResource === "audio"
+                                                    ? "audio/*"
+                                                    : selectedResource === "video"
+                                                        ? "video/*"
+                                                        : "*/*"
+                                        }
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0] ?? null;
+
+                                            if (!file) return;
+
+                                            if (!ResourceIsValid(file, selectedResource)) {
+                                                setUploadError("You entered the wrong resource type");
+                                                e.target.value = "";
+                                                return;
+                                            }
+
+                                            setUploadError("");
+                                            setSelectedFile(file);
+                                        }}
+                                    />
+                                    {uploadError && (
+                                        <div className="upload-error">
+                                            <span>⚠</span>
+                                            {uploadError}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </section>
 
+                        {/**************ALGORITHMS **************/}
                         <section className="panel crypto-panel">
                             <div className="panel-header">
                                 <div>
@@ -406,15 +529,12 @@ function App() {
                                                     </span>
                                                     <span className="category-chevron">{isOpen ? "-" : "+"}</span>
                                                 </div>
-
                                             </button>
 
                                             {isOpen && (
                                                 <div className="algorithm-options">
                                                     {category.algorithms.map((algorithm) => {
-                                                        const isSupported = availableAlgorithms.some(
-                                                            available => available.id === algorithm.id
-                                                        );
+                                                        const isSupported = availableAlgorithms.some(available => available.id === algorithm.id);
 
                                                         return (
                                                             <button
@@ -438,15 +558,14 @@ function App() {
                                                                 </div>
                                                             </button>
                                                         );
-                                                    }
-                                                    )}
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
                                     );
-                                }
-                                )}
+                                })}
                             </div>
+                            {/**************SECURITY KEY **************/}
                             {selectedAlgorithmConfig?.keyType === "password" && (
                                 <>
                                     <label className="field-label key-label">
@@ -454,8 +573,48 @@ function App() {
                                     </label>
 
                                     <div className="password-input">
-                                        <input type="password" placeholder="Enter your secret key" />
-                                        <button type="button">◉</button>
+                                        <input type={showPassword ? "text" : "password"}
+                                            placeholder="Enter your secret key"
+                                            value={inputPassword}
+                                            onChange={(e) => setInputPassword(e.target.value)}
+                                        />
+                                        <button type="button"
+                                            onClick={() => setShowPassword((prev) => !prev)}
+                                            aria-label={showPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showPassword ?
+                                                (
+                                                    <svg
+                                                        viewBox="0 0 24 24"
+                                                        width="18"
+                                                        height="18"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    >
+                                                        <path d="M3 3l18 18" />
+                                                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                                                        <path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c5 0 8.3 4 9 5a11.6 11.6 0 0 1-3.2 3.3" />
+                                                        <path d="M6.6 6.6C4.5 8 3.3 9.7 3 10c.7 1 4 5 9 5 1.1 0 2.1-.2 3-.5" />
+                                                    </svg>
+                                                ) : (
+                                                    <svg
+                                                        viewBox="0 0 24 24"
+                                                        width="18"
+                                                        height="18"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    >
+                                                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                                                        <circle cx="12" cy="12" r="3" />
+                                                    </svg>
+                                                )}
+                                        </button>
                                     </div>
                                     <div className="security-note">
                                         <span>✓</span> Your encryption key is processed locally
@@ -485,7 +644,6 @@ function App() {
                                             <span>✓</span>
                                             Your private key remains on your device
                                         </div>
-
                                     </div>
                                 )}
                             {selectedAlgorithmConfig?.operation === "key-exchange" && (
@@ -533,6 +691,7 @@ function App() {
                             {selectedAlgorithmConfig?.operation === "encryption" && (
                                 <>
                                     {isProcessing ? (
+                                        /************** PROCESSING PROGRESSION ANIMATION **************/
                                         <div className="processing-panel">
                                             <div className="processing-icon">◈</div>
                                             <div className="processing-title">
@@ -543,8 +702,7 @@ function App() {
                                             </div>
 
                                             <div className="processing-bar">
-                                                <div
-                                                    className="processing-progress"
+                                                <div className="processing-progress"
                                                     style={{ width: `${((processingStep + 1) / processingSteps.length) * 100}%`, }}
                                                 />
                                             </div>
@@ -575,11 +733,18 @@ function App() {
                                                 <span>{selectedAlgorithm}</span>
                                                 <span>LOCAL PROCESSING</span>
                                             </div>
-
+                                        </div>
+                                    ) : operationError ? (
+                                        /**************ERROR SHOWING SECTION **************/
+                                        <div className="error-panel">
+                                            <div className="error-icon">!</div>
+                                            <div className="error-tile">{mode === "decrypt" ? "DECRYPTION FAILED" : "ENCRYPTION FAILED"}</div>
+                                            <div className="error-description">{operationError} </div>
+                                            <button className="primary-action" onClick={() => setOperationError(null)}>↻ Try Again</button>
                                         </div>
                                     ) : operationComplete ? (
+                                        /**************COMPLETE RESULT SECTION **************/
                                         <div className="completion-panel">
-
                                             <div className="completion-icon">✓</div>
 
                                             <div className="completion-title">
@@ -595,8 +760,43 @@ function App() {
                                                         <span>{selectedAlgorithm}</span>
                                                     </div>
                                                     <div className="result-box">
-                                                        {operationResult}
+                                                        {mode === "decrypt" && decryptedFile ? (
+                                                            <div className="decrypted-preview">
+                                                                <div className="file-info">
+                                                                    <strong>{decryptedFile.name}</strong>
+                                                                    <span>
+                                                                        {decryptedFile.type || "Unknown type"} ·{" "}
+                                                                        {(decryptedFile.size / 1024 / 1024).toFixed(2)} MB
+                                                                    </span>
+                                                                </div>
+
+                                                                {decryptedFile.type.startsWith("image/") && (
+                                                                    <img src={URL.createObjectURL(decryptedFile)} alt={decryptedFile.name} className="preview-image" />
+                                                                )}
+
+                                                                {decryptedFile.type.startsWith("audio/") && (
+                                                                    <audio controls src={URL.createObjectURL(decryptedFile)} className="preview-audio" />
+                                                                )}
+
+                                                                {decryptedFile.type.startsWith("video/") && (
+                                                                    <video controls src={URL.createObjectURL(decryptedFile)} className="preview-video" />
+                                                                )}
+
+                                                                {decryptedFile.type.startsWith("text/") && (
+                                                                    <iframe src={URL.createObjectURL(decryptedFile)} title={`Preview of ${decryptedFile.name}`} className="preview-text" />
+                                                                )}
+
+                                                                {!decryptedFile.type.startsWith("image/") && !decryptedFile.type.startsWith("audio/") && !decryptedFile.type.startsWith("video/") && !decryptedFile.type.startsWith("text/") && (
+                                                                    <div className="generic-file-preview">📄
+                                                                        <span>Preview unavailable</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            operationResult
+                                                        )}
                                                     </div>
+                                                    {/**************COPY & DOWNLOAD BUTTONS **************/}
                                                     <div className="result-actions">
                                                         <button
                                                             className={`result-action ${copied ? "done" : ""}`}
@@ -606,7 +806,6 @@ function App() {
                                                                 await navigator.clipboard.writeText(operationResult);
 
                                                                 setCopied(true);
-
                                                                 setTimeout(() => {
                                                                     setCopied(false);
                                                                 }, 3000);
@@ -614,29 +813,44 @@ function App() {
                                                         >
                                                             {copied ? "✓ Copied" : "⧉ Copy"}
                                                         </button>
-
                                                         <button
                                                             className={`result-action ${downloaded ? "done" : ""}`}
+                                                            disabled={mode === "decrypt" && !decryptedFile}
                                                             onClick={() => {
-                                                                const blob = new Blob([operationResult], { type: "text/plain" });
-                                                                const url = URL.createObjectURL(blob);
-                                                                const link = document.createElement("a");
-                                                                link.href = url;
-                                                                link.download = "lockbox-encrypted.txt";
-                                                                link.click();
+                                                                if (mode === "decrypt") {
+                                                                    if (!decryptedFile) return;
 
-                                                                URL.revokeObjectURL(url);
+                                                                    downloadFile(decryptedFile);
+                                                                } else {
+                                                                    const blob = new Blob(
+                                                                        [operationResult],
+                                                                        { type: "text/plain" }
+                                                                    );
+
+                                                                    const url = URL.createObjectURL(blob);
+                                                                    const link = document.createElement("a");
+                                                                    link.href = url;
+                                                                    link.download = "lockbox-encrypted.txt";
+
+                                                                    document.body.appendChild(link);
+                                                                    link.click();
+                                                                    document.body.removeChild(link);
+
+                                                                    URL.revokeObjectURL(url);
+                                                                }
                                                                 setDownloaded(true);
-
                                                                 setTimeout(() => {
                                                                     setDownloaded(false);
                                                                 }, 3000);
                                                             }}
                                                         >
-                                                            {downloaded ? "✓ Downloaded" : "↓ Download"}
+                                                            {downloaded
+                                                                ? "✓ Downloaded"
+                                                                : mode === "decrypt" && decryptedFile
+                                                                    ? `↓ Download ${decryptedFile.name}`
+                                                                    : "↓ Download"}
                                                         </button>
                                                     </div>
-
                                                 </div>
                                             )}
                                             <div className="completion-meta">
@@ -646,52 +860,139 @@ function App() {
 
                                             <button
                                                 className="primary-action"
-                                                onClick={() => { setOperationComplete(false); }}
+                                                onClick={() => {
+                                                    setOperationComplete(false);
+                                                    setOperationResult(null);
+                                                    setResourceText("");
+                                                    setInputPassword("");
+                                                    setSelectedFile(null);
+                                                    setUploadError("");
+                                                    setCopied(false);
+                                                    setDownloaded(false);
+                                                    setDecryptedFile(null);
+
+                                                    const fileInput = document.getElementById("resource-upload") as HTMLInputElement | null;
+                                                    if (fileInput) fileInput.value = "";
+                                                }}
                                             >
                                                 <span>↻</span>
                                                 {mode === "encrypt" ? "Encrypt Another Resource" : "Decrypt Another Resource"}
                                             </button>
                                         </div>
                                     ) : (
-                                        <button
-                                            className="primary-action"
-                                            disabled={isProcessing}
-                                            onClick={() => {
-                                                setCopied(false);
-                                                setDownloaded(false);
-                                                setOperationResult(null);
-                                                setOperationComplete(false);
-                                                setIsProcessing(true);
-                                                setProcessingStep(0);
+                                        /**************MAIN BUTTON **************/
+                                        <>
+                                            <button
+                                                className="primary-action"
+                                                disabled={isProcessing || !hasResource}
+                                                onClick={async () => {
+                                                    setCopied(false);
+                                                    setDownloaded(false);
+                                                    setOperationResult(null);
+                                                    setOperationComplete(false);
+                                                    setIsProcessing(true);
+                                                    setProcessingStep(0);
+                                                    setOperationError(null);
 
-                                                let step = 0;
-                                                const interval = setInterval(() => {
-                                                    step++;
-                                                    if (step >= processingSteps.length) {
-                                                        clearInterval(interval);
+                                                    try {
+                                                        if (mode === "encrypt") {
+                                                            if (selectedResource === "text") {
+                                                                const result = await encryptText(resourceText, inputPassword);
+                                                                const encryptedPackage = createPackage(result, { resourceType: "text" });
+
+                                                                setOperationResult(encryptedPackage);
+                                                            } else {
+                                                                if (!selectedFile) {
+                                                                    setOperationError("Please select a file first.");
+                                                                    return;
+                                                                }
+                                                                const { result, metadata } = await encryptFile(selectedFile, selectedResource, inputPassword);
+
+                                                                const encryptedPackage = createPackage(result, metadata);
+
+                                                                setOperationResult(encryptedPackage);
+                                                            }
+                                                        } else {
+                                                            if (selectedResource === "text") {
+                                                                const packageData = unpackage(resourceText);
+                                                                const decryptedText = await decryptText(packageData.ciphertext, inputPassword, packageData.salt, packageData.iv);
+
+                                                                setOperationResult(decryptedText);
+                                                            } else {
+                                                                if (!selectedFile) {
+                                                                    setOperationError("Please provide an encrypted LockBox package.");
+                                                                    return;
+                                                                }
+                                                                const encryptedPackage = await selectedFile.text();
+                                                                const decryptedFile = await decryptFile(encryptedPackage.trim(), inputPassword);
+
+                                                                setDecryptedFile(decryptedFile);
+                                                                setOperationResult(`Decrypted file: ${decryptedFile.name}`);
+                                                            }
+                                                        }
+
+                                                        let step = 0;
+
+                                                        const interval = setInterval(() => {
+                                                            step++;
+                                                            if (step >= processingSteps.length) {
+                                                                clearInterval(interval);
+                                                                setProcessingStep(processingSteps.length);
+                                                                setIsProcessing(false);
+                                                                setOperationComplete(true);
+
+                                                                return;
+                                                            }
+                                                            setProcessingStep(step);
+                                                        }, 800);
+
+                                                    } catch (error) {
+                                                        console.error("Operation failed: ", error);
+
                                                         setIsProcessing(false);
-                                                        setOperationComplete(true);
-                                                        setOperationResult("LBX1:AES256GCM:ENCRYPTED_RESOURCE_PREVIEW");
-                                                        return;
+                                                        setOperationComplete(false);
+
+                                                        if (error instanceof CryptoError) {
+                                                            switch (error.code) {
+                                                                case "INVALID_PACKAGE":
+                                                                    setOperationError("This doesn't appear to be a valid LockBox encrypted resource");
+                                                                    break;
+                                                                case "AUTHENTICATION_FAILED":
+                                                                    setOperationError("The password is incorrect or the encrypted resource has been modified");
+                                                                    break;
+                                                                case "DECRYPTION_FAILED":
+                                                                    setOperationError("LockBox could not decrpyt this resource. Please try again.");
+                                                                    break;
+                                                                case "ENCRYPTION_FAILED":
+                                                                    setOperationError("LockBox could not encrypt this resource. Please try again.");
+                                                                    break;
+                                                                default:
+                                                                    setOperationError("The operation could not be completed.");
+                                                            }
+                                                        } else {
+                                                            setOperationError("Something unexpected happened. Please try again");
+                                                        }
                                                     }
+                                                }}
+                                            >
+                                                <span>
+                                                    {mode === "encrypt" ? "🔒" : "🔓"}
+                                                </span>
 
-                                                    setProcessingStep(step);
-                                                }, 800);
-                                            }}
-                                        >
-                                            <span>
-                                                {mode === "encrypt" ? "🔒" : "🔓"}
-                                            </span>
-
-                                            {mode === "encrypt"
-                                                ? "Encrypt Resource"
-                                                : "Decrypt Resource"}
-                                        </button>
+                                                {mode === "encrypt" ? "Encrypt Resource" : "Decrypt Resource"}
+                                            </button>
+                                            {!hasResource && (
+                                                <p className="action-reason" role="status">
+                                                    {resourceRequirementMessage}
+                                                </p>
+                                            )}
+                                        </>
                                     )}
                                 </>
                             )}
                         </section>
                     </div>
+                    {/************** APP DETAILS **************/}
                     <section className="activity-panel">
                         <div className="activity-heading">
                             <span className="activity-dot" />
@@ -715,7 +1016,7 @@ function App() {
                 </section>
             </main>
             <footer>
-                <span>LockBox v0.1</span>
+                <span>LockBox</span>
                 <span>CLIENT SIDE CRYPTOGRAPHY</span>
                 <span>● SYSTEM READY</span>
             </footer>
@@ -724,3 +1025,7 @@ function App() {
 }
 
 export default App;
+
+// Add a feature to allow users to just lock their resource, not encrypt fully. Make it so that the user first picks  what they want, simple lock on their resource or full control of encryption on their resource. If they select lock, the modes become create lock and remove lock with no need to show the algorithms used, if they select encrypt, the modes become encrypt and decrypt.
+// Include a welcome/help feature to guide the user on how to work on the platform and decide which service they need and those they don't
+// Make the animation truthfull
