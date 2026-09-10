@@ -82,3 +82,20 @@ export function unpackage(encryptedPackage: string) {
         ciphertext: base64ToBytes(packageData.ciphertext),
     };
 }
+
+export function isPackageValid(packageString: string): boolean {
+    try {
+        const packageData = parsePackage(packageString);
+
+        return (
+            packageData.version === 1 &&
+            packageData.algorithm === "AES-256-GCM" &&
+            typeof packageData.resourceType === "string" &&
+            typeof packageData.salt === "string" &&
+            typeof packageData.iv === "string" &&
+            typeof packageData.ciphertext === "string"
+        );
+    } catch {
+        return false;
+    }
+}

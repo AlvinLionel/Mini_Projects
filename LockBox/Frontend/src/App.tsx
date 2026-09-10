@@ -1,7 +1,7 @@
-import { useState } from "react";
 import "../styles/App.css";
+import { useState } from "react";
 import { encryptText, decryptText } from "../crypto/aes";
-import { createPackage, unpackage } from "../crypto/package";
+import { createPackage, isPackageValid, unpackage } from "../crypto/package";
 import { CryptoError } from "../crypto/error";
 import { type ResourceType, encryptFile, decryptFile, downloadFile } from "../crypto/resourceCrypto";
 
@@ -283,14 +283,13 @@ function App() {
             "Preparing resource",
             "Generating secure parameters",
             "Deriving encryption key",
-            "Encrypting resource",
-            "Authenticating encrypted data",
+            "Encrypting and authenticating resource",
         ]
         : [
             "Reading encrypted resource",
             "Verifying encrypted data",
             "Deriving decryption key",
-            "Decrypting resource",
+            "Decrypting and authenticating resource",
             "Restoring original resource",
         ];
 
@@ -457,20 +456,34 @@ function App() {
 
                                     <input type="file" id="resource-upload" hidden
                                         accept={
-                                            selectedResource === "image"
-                                                ? "image/*"
-                                                : selectedResource === "audio"
-                                                    ? "audio/*"
-                                                    : selectedResource === "video"
-                                                        ? "video/*"
-                                                        : "*/*"
+                                            mode === "decrypt"
+                                                ? ".lbx,application/x-lockbox"
+                                                : selectedResource === "image"
+                                                    ? "image/*"
+                                                    : selectedResource === "audio"
+                                                        ? "audio/*"
+                                                        : selectedResource === "video"
+                                                            ? "video/*"
+                                                            : "*/*"
                                         }
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                             const file = e.target.files?.[0] ?? null;
 
                                             if (!file) return;
 
-                                            if (!ResourceIsValid(file, selectedResource)) {
+                                            if (mode === "decrypt") {
+                                                if (!file.name.toLowerCase().endsWith(".lbx") && file.type !== "application/x-lockbox") {
+                                                    setUploadError("Please select a valid LockBox (.lbx) file.");
+                                                    e.target.value = "";
+                                                    return;
+                                                }
+                                                const packageString = (await file.text()).trim();
+                                                if (!isPackageValid(packageString)) {
+                                                    setUploadError("This file is not a valid LockBox package or has been tampered with.");
+                                                    e.target.value = "";
+                                                    return;
+                                                }
+                                            } else if (!ResourceIsValid(file, selectedResource)) {
                                                 setUploadError("You entered the wrong resource type");
                                                 e.target.value = "";
                                                 return;
@@ -759,6 +772,7 @@ function App() {
                                                         <span>ENCRYPTED RESOURCE</span>
                                                         <span>{selectedAlgorithm}</span>
                                                     </div>
+                                                    {/**************RESULT DISPLAY SECTION **************/}
                                                     <div className="result-box">
                                                         {mode === "decrypt" && decryptedFile ? (
                                                             <div className="decrypted-preview">
@@ -824,13 +838,17 @@ function App() {
                                                                 } else {
                                                                     const blob = new Blob(
                                                                         [operationResult],
-                                                                        { type: "text/plain" }
+                                                                        { type: "application/x-lockbox" }
                                                                     );
 
                                                                     const url = URL.createObjectURL(blob);
                                                                     const link = document.createElement("a");
                                                                     link.href = url;
-                                                                    link.download = "lockbox-encrypted.txt";
+
+                                                                    const originalName = selectedResource === "text" ? "encrypted-text" : selectedFile?.name ?? "lockbox-resource";
+                                                                    const baseName = originalName.includes(".") ? originalName.substring(0, originalName.lastIndexOf(".")) : originalName;
+
+                                                                    link.download = `${baseName}.lbx`;
 
                                                                     document.body.appendChild(link);
                                                                     link.click();
@@ -897,7 +915,7 @@ function App() {
                                                     try {
                                                         if (mode === "encrypt") {
                                                             if (selectedResource === "text") {
-                                                                const result = await encryptText(resourceText, inputPassword);
+                                                                const result = await encryptText(resourceText, inputPassword, setProcessingStep);
                                                                 const encryptedPackage = createPackage(result, { resourceType: "text" });
 
                                                                 setOperationResult(encryptedPackage);
@@ -906,7 +924,7 @@ function App() {
                                                                     setOperationError("Please select a file first.");
                                                                     return;
                                                                 }
-                                                                const { result, metadata } = await encryptFile(selectedFile, selectedResource, inputPassword);
+                                                                const { result, metadata } = await encryptFile(selectedFile, selectedResource, inputPassword, setProcessingStep);
 
                                                                 const encryptedPackage = createPackage(result, metadata);
 
@@ -915,8 +933,10 @@ function App() {
                                                         } else {
                                                             if (selectedResource === "text") {
                                                                 const packageData = unpackage(resourceText);
-                                                                const decryptedText = await decryptText(packageData.ciphertext, inputPassword, packageData.salt, packageData.iv);
+                                                                setProcessingStep(1);
+                                                                const decryptedText = await decryptText(packageData.ciphertext, inputPassword, packageData.salt, packageData.iv, setProcessingStep);
 
+                                                                setProcessingStep(4);
                                                                 setOperationResult(decryptedText);
                                                             } else {
                                                                 if (!selectedFile) {
@@ -924,27 +944,18 @@ function App() {
                                                                     return;
                                                                 }
                                                                 const encryptedPackage = await selectedFile.text();
-                                                                const decryptedFile = await decryptFile(encryptedPackage.trim(), inputPassword);
+                                                                setProcessingStep(1);
+                                                                const decryptedFile = await decryptFile(encryptedPackage.trim(), inputPassword, setProcessingStep);
 
+                                                                setProcessingStep(4);
                                                                 setDecryptedFile(decryptedFile);
                                                                 setOperationResult(`Decrypted file: ${decryptedFile.name}`);
                                                             }
                                                         }
 
-                                                        let step = 0;
-
-                                                        const interval = setInterval(() => {
-                                                            step++;
-                                                            if (step >= processingSteps.length) {
-                                                                clearInterval(interval);
-                                                                setProcessingStep(processingSteps.length);
-                                                                setIsProcessing(false);
-                                                                setOperationComplete(true);
-
-                                                                return;
-                                                            }
-                                                            setProcessingStep(step);
-                                                        }, 800);
+                                                        setProcessingStep(processingSteps.length);
+                                                        setIsProcessing(false);
+                                                        setOperationComplete(true);
 
                                                     } catch (error) {
                                                         console.error("Operation failed: ", error);
@@ -970,7 +981,7 @@ function App() {
                                                                     setOperationError("The operation could not be completed.");
                                                             }
                                                         } else {
-                                                            setOperationError("Something unexpected happened. Please try again");
+                                                            setOperationError(mode === "decrypt" ? "The entered lbx file has been tampered with or corrupted" : "Something unexpected happened. Please try again");
                                                         }
                                                     }
                                                 }}

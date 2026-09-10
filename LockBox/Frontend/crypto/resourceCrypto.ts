@@ -1,6 +1,5 @@
-import { encryptBytes, decryptBytes, type EncryptionResult } from "./aes";
+import { encryptBytes, decryptBytes, type CryptoProgress, type EncryptionResult } from "./aes";
 import { type LockBoxPackage, base64ToBytes } from "./package";
-import { deriveKey } from "./KeyDerivation";
 
 const PACKAGE_PREFIX = "LBX1";
 export type ResourceType = "text" | "file" | "image" | "audio" | "video" | "folder";
@@ -32,7 +31,7 @@ export async function decryptResource(ciphertext: Uint8Array<ArrayBuffer>, passw
     return decryptedBytes;
 }
 
-export async function encryptFile(file: File, resourceType: ResourceType, password: string): Promise<{
+export async function encryptFile(file: File, resourceType: ResourceType, password: string, onProgress?: CryptoProgress): Promise<{
     result: EncryptionResult;
     metadata: {
         resourceType: ResourceType;
@@ -41,7 +40,7 @@ export async function encryptFile(file: File, resourceType: ResourceType, passwo
     };
 }> {
     const bytes = await resourceToBytes(file, resourceType);
-    const result = await encryptBytes(bytes, password);
+    const result = await encryptBytes(bytes, password, onProgress);
 
     return {
         result,
@@ -53,21 +52,15 @@ export async function encryptFile(file: File, resourceType: ResourceType, passwo
     };
 }
 
-export async function decryptFile(packageString: string, password: string): Promise<File> {
+export async function decryptFile(packageString: string, password: string, onProgress?: CryptoProgress): Promise<File> {
     const packageData = parsePackage(packageString);
     const salt = base64ToBytes(packageData.salt);
     const iv = base64ToBytes(packageData.iv);
     const ciphertext = base64ToBytes(packageData.ciphertext);
-    const key = await deriveKey(password, salt);
-
-    const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv, },
-        key,
-        ciphertext
-    );
+    const decryptedBytes = await decryptBytes(ciphertext, password, salt, iv, onProgress);
 
     const decryptedBlob = new Blob(
-        [decryptedBuffer],
+        [decryptedBytes.buffer as ArrayBuffer],
         { type: packageData.mimeType || "application/octet-stream" }
     );
 
