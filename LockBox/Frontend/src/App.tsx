@@ -454,26 +454,75 @@ function App() {
                                         e.preventDefault();
                                         setIsDragging(false);
                                     }}
-                                    onDrop={(e) => {
+                                    onDrop={async (e) => {
                                         e.preventDefault();
                                         setIsDragging(false);
 
                                         const files = Array.from(e.dataTransfer.files ?? []);
                                         const file = files[0] ?? null;
+
                                         if (!file && selectedResource === "folder") {
                                             setUploadError("The selected folder is empty.");
                                             return;
                                         }
                                         if (!file) return;
 
-                                        if (selectedResource === "folder") {
-                                            void createFolderArchive(files).then(({ file: archive, summary }) => {
-                                                setSelectedFile(archive);
-                                                setFolderSummary(summary);
+                                        if (mode === "decrypt") {
+                                            if (!file.name.toLowerCase().endsWith(".lbx") && file.type !== "application/x-lockbox") {
+                                                setUploadError("Please select a valid LockBox (.lbx) file.");
+                                                return;
+                                            }
+
+                                            void file.text().then((packageString) => {
+                                                const trimmedPackage = packageString.trim();
+                                                if (!isPackageValid(trimmedPackage)) {
+                                                    setUploadError("This file is not a valid LockBox package or has been tampered with.");
+                                                    return;
+                                                }
                                                 setUploadError("");
-                                            }).catch((error) => {
-                                                setUploadError(error instanceof CryptoError ? error.message : "The folder could not be read.");
-                                            });
+                                                setSelectedFile(file);
+                                            }).catch(() => setUploadError("The LockBox file could not be read."));
+
+                                            return;
+                                        }
+
+                                        if (selectedResource === "folder") {
+                                            const item = e.dataTransfer.items?.[0];
+
+                                            const itemWithDirectorySupport = item as DataTransferItem & {
+                                                getAsFileSystemHandle?: () => Promise<FileSystemDirectoryHandle>;
+                                            };
+
+                                            if (itemWithDirectorySupport?.getAsFileSystemHandle) {
+                                                try {
+                                                    const handle = await itemWithDirectorySupport.getAsFileSystemHandle();
+
+                                                    if (handle.kind !== "directory") {
+                                                        setUploadError("Please drop a folder.");
+                                                        return;
+                                                    }
+
+                                                    const archive = await createFolderArchiveFromDirectory(handle);
+
+                                                    setSelectedFile(archive.file);
+                                                    setFolderSummary(archive.summary);
+                                                    setUploadError("");
+                                                } catch (error) {
+                                                    setUploadError(error instanceof CryptoError ? error.message : "The selected folder could not be archived.");
+                                                }
+
+                                                return;
+                                            }
+
+                                            void createFolderArchive(files)
+                                                .then(({ file: archive, summary }) => {
+                                                    setSelectedFile(archive);
+                                                    setFolderSummary(summary);
+                                                    setUploadError("");
+                                                })
+                                                .catch((error) => {
+                                                    setUploadError(error instanceof CryptoError ? error.message : "The folder could not be read.");
+                                                });
                                             return;
                                         }
 
@@ -515,8 +564,17 @@ function App() {
                                     ) : (
                                         <>
                                             <div className="upload-icon">↑</div>
-                                            <strong>Drag and drop your {selectedResource} here</strong>
-                                            <span>or click to browse your device</span>
+                                            {mode === "decrypt" ? (
+                                                <>
+                                                    <strong>Drag and drop your LockBox file here</strong>
+                                                    <span>Only .lbx encrypted files are accepted</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <strong>Drag and drop your {selectedResource} here</strong>
+                                                    <span>or click to browse your device</span>
+                                                </>
+                                            )}
 
                                             <button type="button" className="browse-button" onClick={(e) => {
                                                 e.stopPropagation();
@@ -527,7 +585,10 @@ function App() {
                                                 }
                                             }}
                                             >
-                                                {selectedFile ? "Change file" : "Browse files"}
+                                                {selectedFile ? "Change file"
+                                                    : mode === "decrypt"
+                                                        ? "Browse .lbx file"
+                                                        : "Browse files"}
                                             </button>
                                         </>
                                     )}
@@ -1353,7 +1414,3 @@ function App() {
 }
 
 export default App;
-
-// Add a feature to allow users to just lock their resource, not encrypt fully. Make it so that the user first picks  what they want, simple lock on their resource or full control of encryption on their resource. If they select lock, the modes become create lock and remove lock with no need to show the algorithms used, if they select encrypt, the modes become encrypt and decrypt.
-// Include a welcome/help feature to guide the user on how to work on the platform and decide which service they need and those they don't
-// For public key encryption, introduce fingerprint/digital signature to prevent man-in-the-middle attacks.

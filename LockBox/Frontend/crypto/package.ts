@@ -203,9 +203,11 @@ export function isPackageValid(packageString: string): boolean {
 
         return (
             packageData.version === 1 &&
-            (SUPPORTED_ALGORITHMS.includes(packageData.algorithm as SymmetricAlgorithm) || SUPPORTED_RSA_ALGORITHMS.includes(packageData.algorithm as RsaAlgorithm)) &&
+            (SUPPORTED_ALGORITHMS.includes(packageData.algorithm as SymmetricAlgorithm) ||
+                SUPPORTED_RSA_ALGORITHMS.includes(packageData.algorithm as RsaAlgorithm)) &&
             typeof packageData.resourceType === "string" &&
-            (("salt" in packageData && typeof packageData.salt === "string") || ("wrappedKey" in packageData && typeof packageData.wrappedKey === "string")) &&
+            (("salt" in packageData && typeof packageData.salt === "string") ||
+                ("wrappedKey" in packageData && typeof packageData.wrappedKey === "string")) &&
             typeof packageData.iv === "string" &&
             typeof packageData.ciphertext === "string"
         );
