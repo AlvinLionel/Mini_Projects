@@ -2,7 +2,6 @@ import { x25519 } from "@noble/curves/ed25519.js";
 import { CryptoError } from "./error";
 
 export type KeyExchangeAlgorithm = "ECDH" | "X25519";
-
 export interface KeyExchangeKeyPair {
     publicKey: string;
     privateKey: string;

@@ -7,19 +7,17 @@ export interface FolderSummary {
     folderCount: number;
     size: number;
 }
-
 export interface FolderArchive {
     file: File;
     summary: FolderSummary;
 }
-
-const MAX_FOLDER_BYTES = 100 * 1024 * 1024;
-
 interface FolderEntry {
     path: string;
     file?: File;
     directory: boolean;
 }
+
+const MAX_FOLDER_BYTES = 100 * 1024 * 1024;
 
 function getRelativePath(file: File): string {
     const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
@@ -34,22 +32,17 @@ function getFolderName(files: File[]): string {
 async function createArchive(entries: FolderEntry[], folderName: string): Promise<FolderArchive> {
     const files = entries.filter(entry => !entry.directory && entry.file);
 
-    if (files.length === 0) {
-        throw new CryptoError("EMPTY_FOLDER", "The selected folder is empty.");
-    }
+    if (files.length === 0) throw new CryptoError("EMPTY_FOLDER", "The selected folder is empty.");
 
     const totalBytes = files.reduce((total, entry) => total + (entry.file?.size ?? 0), 0);
-    if (totalBytes > MAX_FOLDER_BYTES) {
-        throw new CryptoError("RESOURCE_TOO_LARGE", "This folder is too large for safe browser-only processing. Please choose a folder smaller than 100 MB.");
-    }
+    if (totalBytes > MAX_FOLDER_BYTES) throw new CryptoError("RESOURCE_TOO_LARGE", "This folder is too large for safe browser-only processing. Please choose a folder smaller than 100 MB.");
 
     try {
         const zip = new JSZip();
 
         for (const entry of entries) {
-            if (!entry.path) {
-                throw new Error("Unsupported folder entry.");
-            }
+            if (!entry.path) throw new Error("Unsupported folder entry.");
+
             if (entry.directory) {
                 zip.folder(entry.path.replace(/\/$/, ""));
             } else if (entry.file) {
@@ -79,18 +72,16 @@ async function createArchive(entries: FolderEntry[], folderName: string): Promis
         };
     } catch (error) {
         if (error instanceof CryptoError) throw error;
+
         throw new CryptoError("ARCHIVE_FAILED", "The selected folder could not be archived.");
     }
 }
 
 export async function createFolderArchive(files: File[]): Promise<FolderArchive> {
-    if (files.length === 0) {
-        throw new CryptoError("EMPTY_FOLDER", "The selected folder is empty.");
-    }
+    if (files.length === 0) throw new CryptoError("EMPTY_FOLDER", "The selected folder is empty.");
 
     return createArchive(
-        files.map(file => ({ path: getRelativePath(file), file, directory: false })),
-        getFolderName(files)
+        files.map(file => ({ path: getRelativePath(file), file, directory: false })), getFolderName(files)
     );
 }
 
@@ -141,6 +132,8 @@ export async function inspectFolderArchive(file: File, fallbackName = "Restored 
 
 export function formatBytes(size: number): string {
     if (size < 1024) return `${size} B`;
+
     if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    
     return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }

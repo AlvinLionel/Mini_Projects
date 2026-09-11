@@ -7,7 +7,6 @@ export interface RsaKeyPairPem {
     publicKey: string;
     privateKey: string;
 }
-
 export interface RsaEncryptionResult {
     algorithm: RsaAlgorithm;
     ciphertext: Uint8Array<ArrayBuffer>;
