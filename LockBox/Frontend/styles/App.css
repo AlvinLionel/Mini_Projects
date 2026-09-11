@@ -7,15 +7,38 @@
 }
 
 :root {
-    font-family: "Inter", sans-serif;
-    background: #07090d;
-    color: #e7eaf0;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "Space Mono", monospace;
+    --font-code: "Courier New", monospace;
+    --color-bg: #07090d;
+    --color-text: #e7eaf0;
+    --color-text-bright: #e9ecf4;
+    --color-muted: #626976;
+    --color-muted-strong: #737985;
+    --color-accent: #7886ff;
+    --color-accent-bright: #8792ff;
+    --color-success: #68dba0;
+    --color-danger: #ff6464;
+    --surface-panel: rgba(13, 16, 23, 0.76);
+    --surface-control: rgba(255, 255, 255, 0.035);
+    --surface-input: rgba(4, 6, 10, 0.65);
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-default: rgba(255, 255, 255, 0.08);
+    --border-focus: rgba(119, 135, 255, 0.5);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-pill: 999px;
+    --transition-fast: 0.2s ease;
+    font-family: var(--font-body);
+    background: var(--color-bg);
+    color: var(--color-text);
 }
 
 body {
     min-width: 320px;
     min-height: 100vh;
-    background: #07090d;
+    background: var(--color-bg);
 }
 
 button {
@@ -36,7 +59,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--border-subtle);
     background: rgba(7, 9, 13, 0.78);
     backdrop-filter: blur(18px);
 }
@@ -67,7 +90,7 @@ button {
     display: block;
     margin-top: 3px;
     color: #69707d;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 8px;
     letter-spacing: 0.15em;
 }
@@ -87,7 +110,7 @@ button {
 
 .nav-link.active,
 .nav-link:hover {
-    color: #e9ecf4;
+    color: var(--color-text-bright);
 }
 
 .security-status {
@@ -95,7 +118,7 @@ button {
     align-items: center;
     gap: 18px;
     color: #707784;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 
@@ -104,7 +127,7 @@ button {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #65e6a0;
+    background: var(--color-success);
 }
 
 /******** INTRO *********/
@@ -155,7 +178,7 @@ button {
 
 .crypto-workspace {
     border: 1px solid #ffffff14;
-    background: rgba(13, 16, 23, 0.76);
+    background: var(--surface-panel);
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
 }
 
@@ -163,7 +186,7 @@ button {
 .mode-selector {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .mode {
@@ -211,7 +234,7 @@ button {
 }
 
 .resource-panel {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-header {
@@ -229,7 +252,7 @@ button {
 
 .panel-number {
     color: #59606c;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
 }
 
@@ -239,7 +262,7 @@ button {
 
 .panel-label {
     color: #59606c;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 8px;
     letter-spacing: 0.15em;
 }
@@ -270,17 +293,17 @@ button {
     width: 100%;
     min-height: 96px;
     padding: 12px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
     background: rgba(255, 255, 255, 0.025);
     color: inherit;
     text-align: center;
     cursor: pointer;
     transition:
-        border-color 0.2s ease,
-        background 0.2s ease,
-        transform 0.2s ease,
-        box-shadow 0.2s ease;
+        border-color var(--transition-fast),
+        background var(--transition-fast),
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast);
 }
 
 .resource-card:hover {
@@ -302,9 +325,9 @@ button {
     width: 32px;
     height: 32px;
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-control);
     font-size: 15px;
 }
 
@@ -355,12 +378,12 @@ button {
     height: 265px;
     resize: none;
     padding: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 7px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
     outline: none;
-    background: rgba(4, 6, 10, 0.65);
+    background: var(--surface-input);
     color: #dce0e8;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.7;
 }
@@ -381,7 +404,7 @@ button {
     align-items: center;
     justify-content: center;
     border: 1px dashed rgba(255, 255, 255, 0.12);
-    border-radius: 7px;
+    border-radius: var(--radius-md);
     background: rgba(4, 6, 10, 0.5);
     text-align: center;
     transition: all 0.2s ease;
@@ -450,8 +473,8 @@ button {
 
 .algorithm-category {
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
     background: rgba(3, 5, 9, 0.42);
     transition: border-color 0.2s ease;
 }
@@ -522,7 +545,7 @@ button {
 
 .algorithm-count {
     color: #505762;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 7px;
     letter-spacing: 0.08em;
 }
@@ -532,10 +555,10 @@ button {
     height: 20px;
     display: grid;
     place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-default);
     border-radius: 4px;
-    color: #737985;
-    font-family: "Space Mono", monospace;
+    color: var(--color-muted-strong);
+    font-family: var(--font-mono);
     font-size: 11px;
 }
 
@@ -553,7 +576,7 @@ button {
     gap: 12px;
     padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.018);
     color: #737985;
     text-align: left;
@@ -592,7 +615,7 @@ button {
 .algorithm-info strong {
     display: block;
     color: #bfc4ce;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
 }
 
@@ -612,7 +635,7 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 3px;
     color: #5f6671;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 6px;
     letter-spacing: 0.06em;
     white-space: nowrap;
@@ -653,9 +676,9 @@ button {
 /******** SECRET KEY *********/
 .password-input {
     display: flex;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    background: rgba(4, 6, 10, 0.7);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-input);
 }
 
 .password-input input {
@@ -692,10 +715,10 @@ button {
     width: 100%;
     padding: 14px;
     border: 1px solid rgba(132, 144, 255, 0.5);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: linear-gradient(135deg, #6574ff38, #6574ff14);
     color: #dce0ff;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.08em;
     transition: 0.2s ease;
@@ -733,8 +756,8 @@ button {
 .key-exchange-section {
     margin-top: 18px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
     background: rgba(255, 255, 255, 0.025);
 }
 
@@ -792,12 +815,12 @@ button {
     padding: 12px;
     box-sizing: border-box;
     resize: vertical;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
     outline: none;
     background: rgba(0, 0, 0, 0.18);
     color: inherit;
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 11px;
     line-height: 1.5;
     transition:
@@ -825,8 +848,8 @@ button {
     min-height: 36px;
     padding: 0 13px;
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.035);
+    border-radius: var(--radius-md);
+    background: var(--surface-control);
     color: rgba(255, 255, 255, 0.72);
     font-size: 10px;
     font-weight: 600;
@@ -878,7 +901,7 @@ button {
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.035);
     color: rgba(255, 255, 255, 0.45);
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 9px;
     font-weight: 600;
 }
@@ -1018,7 +1041,7 @@ button {
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.3);
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 8px;
     letter-spacing: 0.06em;
 }
@@ -1107,7 +1130,7 @@ button {
     gap: 18px;
     margin: 18px 0;
     color: rgba(255, 255, 255, 0.3);
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 8px;
     letter-spacing: 0.06em;
 }
@@ -1124,7 +1147,7 @@ button {
     align-items: center;
     margin-bottom: 7px;
     color: rgba(255, 255, 255, 0.35);
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 8px;
     letter-spacing: 0.06em;
 }
@@ -1134,10 +1157,10 @@ button {
     padding: 13px;
     overflow-y: auto;
     border: 1px solid rgba(120, 180, 255, 0.14);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     background: rgba(0, 0, 0, 0.2);
     color: rgba(180, 220, 255, 0.8);
-    font-family: "Courier New", monospace;
+    font-family: var(--font-code);
     font-size: 9px;
     line-height: 1.6;
     word-break: break-all;
@@ -1153,7 +1176,7 @@ button {
     flex: 1;
     padding: 8px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.03);
     color: rgba(255, 255, 255, 0.55);
     font-size: 9px;
@@ -1189,7 +1212,7 @@ button {
     gap: 12px;
     padding: 14px 16px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: rgba(255, 255, 255, 0.025);
 }
 
@@ -1224,7 +1247,7 @@ button {
     width: 100%;
     max-height: 420px;
     object-fit: contain;
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: rgba(0, 0, 0, 0.18);
     padding: 6px;
 }
@@ -1232,14 +1255,14 @@ button {
 .preview-audio {
     width: 100%;
     height: 48px;
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
 }
 
 .preview-video {
     display: block;
     width: 100%;
     max-height: 480px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: #000;
     object-fit: contain;
 }
@@ -1248,7 +1271,7 @@ button {
     width: 100%;
     height: 300px;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: transparent;
 }
 
@@ -1294,7 +1317,7 @@ button {
     display: block;
     margin-top: 3px;
     color: #5d6570;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 7px;
     letter-spacing: 0.1em;
 }
@@ -1304,7 +1327,7 @@ button {
     align-items: center;
     gap: 13px;
     color: #505762;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 7px;
     letter-spacing: 0.06em;
 }
@@ -1328,7 +1351,7 @@ footer {
     justify-content: space-between;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     color: #4d535e;
-    font-family: "Space Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 7px;
     letter-spacing: 0.12em;
 }
@@ -1402,4 +1425,8 @@ footer {
         flex-direction: column;
         gap: 7px;
     }
+}
+
+.key-input textarea.secret-field {
+    -webkit-text-security: disc;
 }

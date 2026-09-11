@@ -1,14 +1,14 @@
 import { encryptBytes, decryptBytes, type CryptoProgress, type EncryptionResult } from "./aes";
-import { type LockBoxPackage, base64ToBytes } from "./package";
+import { base64ToBytes, parsePackage } from "./package";
+import type { SymmetricAlgorithm } from "./KeyDerivation";
 
-const PACKAGE_PREFIX = "LBX1";
 export type ResourceType = "text" | "file" | "image" | "audio" | "video" | "folder";
 
 export async function resourceToBytes(resource: string | File, resourceType: ResourceType): Promise<Uint8Array<ArrayBuffer>> {
     if (resourceType === "text")
         return new TextEncoder().encode(resource as string) as Uint8Array<ArrayBuffer>;
 
-    if (resourceType === "file" || resourceType === "image" || resourceType === "audio" || resourceType === "video") {
+    if (resourceType === "file" || resourceType === "image" || resourceType === "audio" || resourceType === "video" || resourceType === "folder") {
         if (!(resource instanceof File))
             throw new Error("A file resource is required");
 
@@ -18,20 +18,20 @@ export async function resourceToBytes(resource: string | File, resourceType: Res
 
     throw new Error(`Unsupported resource type: ${resourceType}`);
 }
-export async function encryptResource(resource: string | File, resourceType: ResourceType, password: string): Promise<EncryptionResult> {
+export async function encryptResource(resource: string | File, resourceType: ResourceType, password: string, algorithm: SymmetricAlgorithm = "AES-256-GCM"): Promise<EncryptionResult> {
     const bytes: Uint8Array<ArrayBuffer> = await resourceToBytes(resource, resourceType);
 
-    return encryptBytes(bytes, password);
+    return encryptBytes(bytes, password, undefined, algorithm);
 }
-export async function decryptResource(ciphertext: Uint8Array<ArrayBuffer>, password: string, salt: Uint8Array<ArrayBuffer>, iv: Uint8Array<ArrayBuffer>, resourceType: ResourceType): Promise<string | Uint8Array> {
-    const decryptedBytes = await decryptBytes(ciphertext, password, salt, iv);
+export async function decryptResource(ciphertext: Uint8Array<ArrayBuffer>, password: string, salt: Uint8Array<ArrayBuffer>, iv: Uint8Array<ArrayBuffer>, resourceType: ResourceType, algorithm: SymmetricAlgorithm = "AES-256-GCM"): Promise<string | Uint8Array> {
+    const decryptedBytes = await decryptBytes(ciphertext, password, salt, iv, undefined, algorithm);
     if (resourceType === "text")
         return new TextDecoder().decode(decryptedBytes);
 
     return decryptedBytes;
 }
 
-export async function encryptFile(file: File, resourceType: ResourceType, password: string, onProgress?: CryptoProgress): Promise<{
+export async function encryptFile(file: File, resourceType: ResourceType, password: string, onProgress?: CryptoProgress, algorithm: SymmetricAlgorithm = "AES-256-GCM"): Promise<{
     result: EncryptionResult;
     metadata: {
         resourceType: ResourceType;
@@ -40,7 +40,7 @@ export async function encryptFile(file: File, resourceType: ResourceType, passwo
     };
 }> {
     const bytes = await resourceToBytes(file, resourceType);
-    const result = await encryptBytes(bytes, password, onProgress);
+    const result = await encryptBytes(bytes, password, onProgress,algorithm);
 
     return {
         result,
@@ -54,10 +54,13 @@ export async function encryptFile(file: File, resourceType: ResourceType, passwo
 
 export async function decryptFile(packageString: string, password: string, onProgress?: CryptoProgress): Promise<File> {
     const packageData = parsePackage(packageString);
+    if (!("salt" in packageData)) {
+        throw new Error("RSA packages can only contain text resources.");
+    }
     const salt = base64ToBytes(packageData.salt);
     const iv = base64ToBytes(packageData.iv);
     const ciphertext = base64ToBytes(packageData.ciphertext);
-    const decryptedBytes = await decryptBytes(ciphertext, password, salt, iv, onProgress);
+    const decryptedBytes = await decryptBytes(ciphertext, password, salt, iv, onProgress, packageData.algorithm);
 
     const decryptedBlob = new Blob(
         [decryptedBytes.buffer as ArrayBuffer],
@@ -82,49 +85,4 @@ export function downloadFile(file:File):void{
     document.body.removeChild(link);
 
     URL.revokeObjectURL(url);
-}
-
-export function parsePackage(packageString: string): LockBoxPackage {
-    if (!packageString.startsWith(`${PACKAGE_PREFIX}.`)) {
-        throw new Error("Invalid LockBox package.");
-    }
-
-    const encodedData = packageString.slice(PACKAGE_PREFIX.length + 1);
-
-    let decodedData: string;
-
-    try {
-        decodedData = atob(encodedData);
-    } catch {
-        throw new Error("Invalid LockBox package encoding.");
-    }
-
-    let packageData: LockBoxPackage;
-
-    try {
-        packageData = JSON.parse(decodedData);
-    } catch {
-        throw new Error("Invalid LockBox package data.");
-    }
-
-    if (packageData.version !== 1) {
-        throw new Error("Unsupported LockBox package version.");
-    }
-    if (!packageData.algorithm) {
-        throw new Error("LockBox package is missing its algorithm.");
-    }
-    if (!packageData.resourceType) {
-        throw new Error("LockBox package is missing its resource type.");
-    }
-    if (!packageData.salt) {
-        throw new Error("LockBox package is missing its salt.");
-    }
-    if (!packageData.iv) {
-        throw new Error("LockBox package is missing its IV.");
-    }
-    if (!packageData.ciphertext) {
-        throw new Error("LockBox package is missing its ciphertext.");
-    }
-
-    return packageData;
 }

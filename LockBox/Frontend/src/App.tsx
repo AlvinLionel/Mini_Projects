@@ -1,11 +1,29 @@
 import "../styles/App.css";
 import { useState } from "react";
 import { encryptText, decryptText } from "../crypto/aes";
-import { createPackage, isPackageValid, unpackage } from "../crypto/package";
+import { createPackage, createRsaPackage, isPackageValid, unpackage } from "../crypto/package";
 import { CryptoError } from "../crypto/error";
 import { type ResourceType, encryptFile, decryptFile, downloadFile } from "../crypto/resourceCrypto";
+import type { SymmetricAlgorithm } from "../crypto/KeyDerivation";
+import { decryptRsaText, encryptRsaText, generateRsaKeyPair, type RsaAlgorithm } from "../crypto/rsa";
+import { deriveSharedSecret, generateKeyExchangePair, type KeyExchangeAlgorithm } from "../crypto/keyExchange";
+import { createFolderArchive, createFolderArchiveFromDirectory, formatBytes, inspectFolderArchive, type FolderSummary } from "../crypto/folderArchive";
 
 type Mode = "encrypt" | "decrypt";
+type EncryptionAlgorithm = SymmetricAlgorithm | RsaAlgorithm | KeyExchangeAlgorithm;
+
+function downloadPrivateKey(privateKey: string, algorithm: RsaAlgorithm): void {
+    const blob = new Blob([privateKey], { type: "application/x-pem-file" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lockbox-${algorithm.toLowerCase()}-private-key.pem`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
 
 type AlgorithmCategory = {
     id: string;
@@ -41,17 +59,6 @@ const algorithmCategories: Record<string, AlgorithmCategory> = {
                 icon: "🔐",
                 badge: "RECOMMENDED",
                 badgeType: "recommended",
-                keyType: "password",
-                operation: "encryption",
-                supports: ["text", "file", "image", "audio", "video", "folder"]
-            },
-            {
-                id: "AES-256-CBC",
-                name: "AES-256-CBC",
-                description: "Strong & compatible",
-                icon: "🔒",
-                badge: "COMPATIBLE",
-                badgeType: "default",
                 keyType: "password",
                 operation: "encryption",
                 supports: ["text", "file", "image", "audio", "video", "folder"]
@@ -208,7 +215,7 @@ const resourceTypes: Record<ResourceType,
 function App() {
     const [mode, setMode] = useState<Mode>("encrypt");
     const [selectedResource, setSelectedResource] = useState<ResourceType>("text");
-    const [selectedAlgorithm, setSelectedAlgorithm] = useState("AES-256-GCM");
+    const [selectedAlgorithm, setSelectedAlgorithm] = useState<EncryptionAlgorithm>("AES-256-GCM");
     const [openCategory, setOpenCategory] = useState<string | null>("symmetric");
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingStep, setProcessingStep] = useState(0);
@@ -224,6 +231,18 @@ function App() {
     const [isDragging, setIsDragging] = useState(false);
     const [uploadError, setUploadError] = useState("");
     const [decryptedFile, setDecryptedFile] = useState<File | null>(null);
+    const [folderSummary, setFolderSummary] = useState<FolderSummary | null>(null);
+    const [decryptedFolderSummary, setDecryptedFolderSummary] = useState<FolderSummary | null>(null);
+    const [publicKey, setPublicKey] = useState("");
+    const [privateKey, setPrivateKey] = useState("");
+    const [showPrivateKey, setShowPrivateKey] = useState(false);
+    const [exchangePublicKey, setExchangePublicKey] = useState("");
+    const [exchangePrivateKey, setExchangePrivateKey] = useState("");
+    const [showExchangePrivateKey, setShowExchangePrivateKey] = useState(false);
+    const [peerPublicKey, setPeerPublicKey] = useState("");
+    const [sharedSecret, setSharedSecret] = useState("");
+    const [showSharedSecret, setShowSharedSecret] = useState(false);
+    const [exchangeError, setExchangeError] = useState("");
 
     const selectedAlgorithmConfig =
         Object.values(algorithmCategories)
@@ -242,6 +261,34 @@ function App() {
     const resourceRequirementMessage = selectedResource === "text"
         ? "Enter text before starting this operation."
         : `Upload a ${resourceTypes[selectedResource].name.toLowerCase()} before starting this operation.`;
+    const keyRequirementMessage = mode === "encrypt"
+        ? "Enter a public key or generate a key pair before starting this operation."
+        : "Enter the private key for this encrypted resource before starting this operation.";
+    const keyMaterialMissing = selectedAlgorithmConfig?.operation === "key-exchange"
+        ? !exchangePrivateKey || (mode === "encrypt" && !peerPublicKey.trim())
+        : selectedAlgorithmConfig?.keyType === "keypair" && !(mode === "encrypt" ? publicKey.trim() : privateKey.trim());
+
+    const handleFolderPicker = async () => {
+        const picker = (window as Window & {
+            showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+        }).showDirectoryPicker;
+
+        if (!picker) {
+            document.getElementById("resource-upload")?.click();
+            return;
+        }
+
+        try {
+            const directory = await picker();
+            const { file, summary } = await createFolderArchiveFromDirectory(directory);
+            setSelectedFile(file);
+            setFolderSummary(summary);
+            setUploadError("");
+        } catch (error) {
+            if ((error as DOMException)?.name === "AbortError") return;
+            setUploadError(error instanceof CryptoError ? error.message : "The folder could not be read.");
+        }
+    };
 
     const handleResourceChange = (resourceType: ResourceType) => {
         const resourceAlgorithms = Object.values(algorithmCategories)
@@ -254,9 +301,11 @@ function App() {
         if (!isCurrentAlgorithmAvailable && resourceAlgorithms.length > 0) {
             const recommendedAlgorithm = resourceAlgorithms.find(algorithm => algorithm.badgeType === "recommended");
 
-            setSelectedAlgorithm(recommendedAlgorithm?.id ?? resourceAlgorithms[0].id);
+            setSelectedAlgorithm((recommendedAlgorithm?.id ?? resourceAlgorithms[0].id) as EncryptionAlgorithm);
         }
         setSelectedFile(null);
+        setFolderSummary(null);
+        setDecryptedFolderSummary(null);
         setUploadError("");
     };
 
@@ -396,7 +445,7 @@ function App() {
                             ) : (
                                 /************** DROP ZONE **************/
                                 <div className={`drop-zone ${isDragging ? "dragging" : ""}`}
-                                    onClick={() => document.getElementById("resource-upload")?.click()}
+                                    onClick={() => selectedResource === "folder" && mode === "encrypt" ? void handleFolderPicker() : document.getElementById("resource-upload")?.click()}
                                     onDragOver={(e) => {
                                         e.preventDefault();
                                         setIsDragging(true);
@@ -409,8 +458,24 @@ function App() {
                                         e.preventDefault();
                                         setIsDragging(false);
 
-                                        const file = e.dataTransfer.files?.[0] ?? null;
+                                        const files = Array.from(e.dataTransfer.files ?? []);
+                                        const file = files[0] ?? null;
+                                        if (!file && selectedResource === "folder") {
+                                            setUploadError("The selected folder is empty.");
+                                            return;
+                                        }
                                         if (!file) return;
+
+                                        if (selectedResource === "folder") {
+                                            void createFolderArchive(files).then(({ file: archive, summary }) => {
+                                                setSelectedFile(archive);
+                                                setFolderSummary(summary);
+                                                setUploadError("");
+                                            }).catch((error) => {
+                                                setUploadError(error instanceof CryptoError ? error.message : "The folder could not be read.");
+                                            });
+                                            return;
+                                        }
 
                                         if (!ResourceIsValid(file, selectedResource)) {
                                             setUploadError(`You entered the wrong resource type`);
@@ -423,16 +488,25 @@ function App() {
                                     {selectedFile ? (
                                         <>
                                             <div className="upload-icon">✓</div>
-                                            <strong>{selectedFile.name}</strong>
+                                            <strong>{selectedResource === "folder" && folderSummary ? folderSummary.folderName : selectedFile.name}</strong>
 
-                                            <span>
-                                                {selectedFile.size >= 1024 * 1024
-                                                    ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
-                                                    : `${(selectedFile.size / 1024).toFixed(1)} KB`}
-                                            </span>
+                                            {selectedResource === "folder" && folderSummary ? (
+                                                <span>{folderSummary.fileCount} files · {folderSummary.folderCount} folders · {formatBytes(folderSummary.size)}</span>
+                                            ) : (
+                                                <span>
+                                                    {selectedFile.size >= 1024 * 1024
+                                                        ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
+                                                        : `${(selectedFile.size / 1024).toFixed(1)} KB`}
+                                                </span>
+                                            )}
 
-                                            <button type="button" className="browse-button" onClick={() => {
-                                                document.getElementById("resource-upload")?.click();
+                                            <button type="button" className="browse-button" onClick={(event) => {
+                                                event.stopPropagation();
+                                                if (selectedResource === "folder" && mode === "encrypt") {
+                                                    void handleFolderPicker();
+                                                } else {
+                                                    document.getElementById("resource-upload")?.click();
+                                                }
                                             }}
                                             >
                                                 Change file
@@ -441,12 +515,16 @@ function App() {
                                     ) : (
                                         <>
                                             <div className="upload-icon">↑</div>
-                                            <strong>Drop your {selectedResource} here</strong>
+                                            <strong>Drag and drop your {selectedResource} here</strong>
                                             <span>or click to browse your device</span>
 
                                             <button type="button" className="browse-button" onClick={(e) => {
                                                 e.stopPropagation();
-                                                document.getElementById("resource-upload")?.click();
+                                                if (selectedResource === "folder" && mode === "encrypt") {
+                                                    void handleFolderPicker();
+                                                } else {
+                                                    document.getElementById("resource-upload")?.click();
+                                                }
                                             }}
                                             >
                                                 {selectedFile ? "Change file" : "Browse files"}
@@ -455,21 +533,42 @@ function App() {
                                     )}
 
                                     <input type="file" id="resource-upload" hidden
+                                        {...(selectedResource === "folder" && mode === "encrypt" ? { webkitdirectory: "", multiple: true } : {})}
                                         accept={
                                             mode === "decrypt"
                                                 ? ".lbx,application/x-lockbox"
-                                                : selectedResource === "image"
-                                                    ? "image/*"
-                                                    : selectedResource === "audio"
-                                                        ? "audio/*"
-                                                        : selectedResource === "video"
-                                                            ? "video/*"
-                                                            : "*/*"
+                                                : selectedResource === "folder"
+                                                    ? undefined
+                                                    : selectedResource === "image"
+                                                        ? "image/*"
+                                                        : selectedResource === "audio"
+                                                            ? "audio/*"
+                                                            : selectedResource === "video"
+                                                                ? "video/*"
+                                                                : "*/*"
                                         }
                                         onChange={async (e) => {
-                                            const file = e.target.files?.[0] ?? null;
+                                            const files = Array.from(e.target.files ?? []);
+                                            const file = files[0] ?? null;
 
+                                            if (!file && mode === "encrypt" && selectedResource === "folder") {
+                                                setUploadError("The selected folder is empty.");
+                                                e.target.value = "";
+                                                return;
+                                            }
                                             if (!file) return;
+
+                                            if (mode === "encrypt" && selectedResource === "folder") {
+                                                try {
+                                                    const { file: archive, summary } = await createFolderArchive(files);
+                                                    setSelectedFile(archive);
+                                                    setFolderSummary(summary);
+                                                    setUploadError("");
+                                                } catch (error) {
+                                                    setUploadError(error instanceof CryptoError ? error.message : "The folder could not be read.");
+                                                }
+                                                return;
+                                            }
 
                                             if (mode === "decrypt") {
                                                 if (!file.name.toLowerCase().endsWith(".lbx") && file.type !== "application/x-lockbox") {
@@ -483,7 +582,7 @@ function App() {
                                                     e.target.value = "";
                                                     return;
                                                 }
-                                            } else if (!ResourceIsValid(file, selectedResource)) {
+                                            } else if (selectedResource !== "folder" && !ResourceIsValid(file, selectedResource)) {
                                                 setUploadError("You entered the wrong resource type");
                                                 e.target.value = "";
                                                 return;
@@ -547,13 +646,18 @@ function App() {
                                             {isOpen && (
                                                 <div className="algorithm-options">
                                                     {category.algorithms.map((algorithm) => {
-                                                        const isSupported = availableAlgorithms.some(available => available.id === algorithm.id);
+                                                        const isSupported = algorithm.operation === "key-exchange" || availableAlgorithms.some(available => available.id === algorithm.id);
 
                                                         return (
                                                             <button
                                                                 key={algorithm.id}
                                                                 className={`algorithm-card ${selectedAlgorithm === algorithm.id ? "selected" : ""} ${!isSupported ? "disabled" : ""}`}
-                                                                onClick={() => { if (isSupported) setSelectedAlgorithm(algorithm.id); }}
+                                                                onClick={() => {
+                                                                    if (isSupported) {
+                                                                        setSelectedAlgorithm(algorithm.id as EncryptionAlgorithm);
+                                                                        setSharedSecret("");
+                                                                    }
+                                                                }}
                                                             >
                                                                 <div className="algorithm-icon">{algorithm.icon}</div>
 
@@ -639,23 +743,62 @@ function App() {
                                     <div className="keypair-section">
                                         <div className="keypair-header">
                                             <div>
-                                                <strong>Encryption key pair</strong>
-                                                <span>Use a public key to protect your resource</span>
+                                                <strong>{mode === "encrypt" ? "Encryption public key" : "Decryption private key"}</strong>
+                                                <span>{mode === "encrypt" ? "Use a public key to protect your resource" : "Use the private key that matches the encryption key pair"}</span>
                                             </div>
                                             <span className="keypair-icon">🔑</span>
                                         </div>
 
-                                        <label className="field-label">Public key</label>
+                                        <label className="field-label">{mode === "encrypt" ? "Public key" : "Private key"}</label>
 
                                         <div className="key-input">
-                                            <textarea placeholder="Paste your public key here..." rows={4} />
+                                            <textarea
+                                                placeholder={mode === "encrypt" ? "Paste your public key here..." : "Paste your private key here..."}
+                                                rows={4}
+                                                value={mode === "encrypt" ? publicKey : privateKey}
+                                                onChange={(event) => mode === "encrypt" ? setPublicKey(event.target.value) : setPrivateKey(event.target.value)}
+                                                className={mode === "decrypt" && privateKey && !showPrivateKey ? "secret-field" : ""}
+                                            />
                                         </div>
 
-                                        <button type="button" className="secondary-action">⚙ Generate Key Pair</button>
+                                        {mode === "decrypt" && privateKey && (
+                                            <button type="button" className="secondary-action" onClick={() => setShowPrivateKey((visible) => !visible)}>
+                                                {showPrivateKey ? "Hide Private Key" : "Reveal Private Key"}
+                                            </button>
+                                        )}
+
+                                        {mode === "encrypt" && (
+                                            <button
+                                                type="button"
+                                                className="secondary-action"
+                                                onClick={async () => {
+                                                    try {
+                                                        const keyPair = await generateRsaKeyPair(selectedAlgorithm as RsaAlgorithm);
+                                                        setPublicKey(keyPair.publicKey);
+                                                        setPrivateKey(keyPair.privateKey);
+                                                        setOperationError(null);
+                                                    } catch {
+                                                        setOperationError("LockBox could not generate the key pair locally.");
+                                                    }
+                                                }}
+                                            >
+                                                ⚙ Generate Key Pair
+                                            </button>
+                                        )}
+
+                                        {privateKey && (
+                                            <button
+                                                type="button"
+                                                className="secondary-action"
+                                                onClick={() => downloadPrivateKey(privateKey, selectedAlgorithm as RsaAlgorithm)}
+                                            >
+                                                ↓ Download Private Key
+                                            </button>
+                                        )}
 
                                         <div className="security-note">
                                             <span>✓</span>
-                                            Your private key remains on your device
+                                            {mode === "encrypt" ? "Your private key remains on your device" : "Your private key is processed locally"}
                                         </div>
                                     </div>
                                 )}
@@ -698,10 +841,103 @@ function App() {
                                         </div>
                                     </div>
 
-                                    <button type="button" className="secondary-action">🔑 Generate Key Pair</button>
+                                    <label className="field-label">Your public key</label>
+                                    <div className="key-input">
+                                        <textarea
+                                            placeholder="Generate your key pair to create a public key..."
+                                            rows={3}
+                                            value={exchangePublicKey}
+                                            readOnly
+                                        />
+                                    </div>
+
+                                    <label className="field-label">Your private key</label>
+                                    <div className="key-input">
+                                        <textarea
+                                            placeholder="Generate or paste your private key here..."
+                                            rows={3}
+                                            value={exchangePrivateKey}
+                                            onChange={(event) => setExchangePrivateKey(event.target.value)}
+                                            className={exchangePrivateKey && !showExchangePrivateKey ? "secret-field" : ""}
+                                        />
+                                    </div>
+
+                                    {exchangePrivateKey && (
+                                        <button type="button" className="secondary-action" onClick={() => setShowExchangePrivateKey((visible) => !visible)}>
+                                            {showExchangePrivateKey ? "Hide Private Key" : "Reveal Private Key"}
+                                        </button>
+                                    )}
+
+                                    <label className="field-label">Peer public key</label>
+                                    <div className="key-input">
+                                        <textarea
+                                            placeholder="Paste the other party's public key here..."
+                                            rows={3}
+                                            value={peerPublicKey}
+                                            onChange={(event) => setPeerPublicKey(event.target.value)}
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="secondary-action"
+                                        onClick={async () => {
+                                            try {
+                                                const keyPair = await generateKeyExchangePair(selectedAlgorithm as KeyExchangeAlgorithm);
+                                                setExchangePublicKey(keyPair.publicKey);
+                                                setExchangePrivateKey(keyPair.privateKey);
+                                                setSharedSecret("");
+                                                setExchangeError("");
+                                            } catch {
+                                                setExchangeError("LockBox could not generate the key pair locally.");
+                                            }
+                                        }}
+                                    >
+                                        🔑 Generate Key Pair
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="secondary-action"
+                                        disabled={!exchangePrivateKey || !peerPublicKey.trim()}
+                                        onClick={async () => {
+                                            try {
+                                                const secret = await deriveSharedSecret(
+                                                    selectedAlgorithm as KeyExchangeAlgorithm,
+                                                    exchangePrivateKey,
+                                                    peerPublicKey
+                                                );
+                                                setSharedSecret(secret);
+                                                setExchangeError("");
+                                            } catch (error) {
+                                                setSharedSecret("");
+                                                setExchangeError(error instanceof CryptoError ? error.message : "The shared secret could not be derived.");
+                                            }
+                                        }}
+                                    >
+                                        ⇄ Establish Shared Secret
+                                    </button>
+
+                                    {sharedSecret && (
+                                        <>
+                                            <label className="field-label">Derived shared secret</label>
+                                            <div className="key-input">
+                                                <textarea value={showSharedSecret ? sharedSecret : "Shared secret derived"} rows={3} readOnly />
+                                            </div>
+                                            <button type="button" className="secondary-action" onClick={() => setShowSharedSecret((visible) => !visible)}>
+                                                {showSharedSecret ? "Hide Shared Secret" : "Reveal Shared Secret"}
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {exchangeError && <div className="upload-error">⚠ {exchangeError}</div>}
+
+                                    <div className="security-note">
+                                        <span>✓</span> Private key and shared secret remain in this browser
+                                    </div>
                                 </div>
                             )}
-                            {selectedAlgorithmConfig?.operation === "encryption" && (
+                            {(selectedAlgorithmConfig?.operation === "encryption" || selectedAlgorithmConfig?.operation === "key-exchange") && (
                                 <>
                                     {isProcessing ? (
                                         /************** PROCESSING PROGRESSION ANIMATION **************/
@@ -774,7 +1010,17 @@ function App() {
                                                     </div>
                                                     {/**************RESULT DISPLAY SECTION **************/}
                                                     <div className="result-box">
-                                                        {mode === "decrypt" && decryptedFile ? (
+                                                        {mode === "decrypt" && decryptedFile && decryptedFolderSummary ? (
+                                                            <div className="decrypted-preview folder-preview">
+                                                                <div className="file-info">
+                                                                    <strong>{decryptedFolderSummary.folderName}</strong>
+                                                                    <span>{decryptedFolderSummary.fileCount} files · {decryptedFolderSummary.folderCount} folders · {formatBytes(decryptedFolderSummary.size)}</span>
+                                                                </div>
+                                                                <div className="generic-file-preview">
+                                                                    📁 <span>Folder archive ready to download</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : mode === "decrypt" && decryptedFile ? (
                                                             <div className="decrypted-preview">
                                                                 <div className="file-info">
                                                                     <strong>{decryptedFile.name}</strong>
@@ -787,19 +1033,15 @@ function App() {
                                                                 {decryptedFile.type.startsWith("image/") && (
                                                                     <img src={URL.createObjectURL(decryptedFile)} alt={decryptedFile.name} className="preview-image" />
                                                                 )}
-
                                                                 {decryptedFile.type.startsWith("audio/") && (
                                                                     <audio controls src={URL.createObjectURL(decryptedFile)} className="preview-audio" />
                                                                 )}
-
                                                                 {decryptedFile.type.startsWith("video/") && (
                                                                     <video controls src={URL.createObjectURL(decryptedFile)} className="preview-video" />
                                                                 )}
-
                                                                 {decryptedFile.type.startsWith("text/") && (
                                                                     <iframe src={URL.createObjectURL(decryptedFile)} title={`Preview of ${decryptedFile.name}`} className="preview-text" />
                                                                 )}
-
                                                                 {!decryptedFile.type.startsWith("image/") && !decryptedFile.type.startsWith("audio/") && !decryptedFile.type.startsWith("video/") && !decryptedFile.type.startsWith("text/") && (
                                                                     <div className="generic-file-preview">📄
                                                                         <span>Preview unavailable</span>
@@ -865,7 +1107,9 @@ function App() {
                                                             {downloaded
                                                                 ? "✓ Downloaded"
                                                                 : mode === "decrypt" && decryptedFile
-                                                                    ? `↓ Download ${decryptedFile.name}`
+                                                                    ? decryptedFolderSummary
+                                                                        ? `↓ Download ${decryptedFolderSummary.folderName}.zip`
+                                                                        : `↓ Download ${decryptedFile.name}`
                                                                     : "↓ Download"}
                                                         </button>
                                                     </div>
@@ -884,6 +1128,8 @@ function App() {
                                                     setResourceText("");
                                                     setInputPassword("");
                                                     setSelectedFile(null);
+                                                    setFolderSummary(null);
+                                                    setDecryptedFolderSummary(null);
                                                     setUploadError("");
                                                     setCopied(false);
                                                     setDownloaded(false);
@@ -902,7 +1148,11 @@ function App() {
                                         <>
                                             <button
                                                 className="primary-action"
-                                                disabled={isProcessing || !hasResource}
+                                                disabled={
+                                                    isProcessing ||
+                                                    !hasResource ||
+                                                    keyMaterialMissing
+                                                }
                                                 onClick={async () => {
                                                     setCopied(false);
                                                     setDownloaded(false);
@@ -915,41 +1165,85 @@ function App() {
                                                     try {
                                                         if (mode === "encrypt") {
                                                             if (selectedResource === "text") {
-                                                                const result = await encryptText(resourceText, inputPassword, setProcessingStep);
-                                                                const encryptedPackage = createPackage(result, { resourceType: "text" });
-
-                                                                setOperationResult(encryptedPackage);
+                                                                if (selectedAlgorithmConfig?.operation === "key-exchange") {
+                                                                    const secret = await deriveSharedSecret(selectedAlgorithm as KeyExchangeAlgorithm, exchangePrivateKey, peerPublicKey);
+                                                                    const result = await encryptText(resourceText, secret, setProcessingStep, "AES-256-GCM");
+                                                                    setOperationResult(createPackage(result, {
+                                                                        resourceType: "text",
+                                                                        keyExchangeAlgorithm: selectedAlgorithm as KeyExchangeAlgorithm,
+                                                                        senderPublicKey: exchangePublicKey,
+                                                                    }));
+                                                                } else if (selectedAlgorithmConfig?.keyType === "keypair") {
+                                                                    const result = await encryptRsaText(resourceText, publicKey, selectedAlgorithm as RsaAlgorithm, setProcessingStep);
+                                                                    setOperationResult(createRsaPackage(result, { resourceType: "text" }));
+                                                                } else {
+                                                                    const result = await encryptText(resourceText, inputPassword, setProcessingStep, selectedAlgorithm as SymmetricAlgorithm);
+                                                                    setOperationResult(createPackage(result, { resourceType: "text" }));
+                                                                }
                                                             } else {
                                                                 if (!selectedFile) {
                                                                     setOperationError("Please select a file first.");
                                                                     return;
                                                                 }
-                                                                const { result, metadata } = await encryptFile(selectedFile, selectedResource, inputPassword, setProcessingStep);
+                                                                const encryptionPassword = selectedAlgorithmConfig?.operation === "key-exchange"
+                                                                    ? await deriveSharedSecret(selectedAlgorithm as KeyExchangeAlgorithm, exchangePrivateKey, peerPublicKey)
+                                                                    : inputPassword;
+                                                                const { result, metadata } = await encryptFile(selectedFile, selectedResource, encryptionPassword, setProcessingStep, "AES-256-GCM");
 
-                                                                const encryptedPackage = createPackage(result, metadata);
+                                                                const encryptedPackage = createPackage(result, {
+                                                                    ...metadata,
+                                                                    ...(selectedAlgorithmConfig?.operation === "key-exchange"
+                                                                        ? { keyExchangeAlgorithm: selectedAlgorithm as KeyExchangeAlgorithm, senderPublicKey: exchangePublicKey }
+                                                                        : {}),
+                                                                    ...(selectedResource === "folder" && folderSummary
+                                                                        ? { folderName: folderSummary.folderName, folderFileCount: folderSummary.fileCount, folderCount: folderSummary.folderCount }
+                                                                        : {}),
+                                                                });
 
                                                                 setOperationResult(encryptedPackage);
                                                             }
                                                         } else {
                                                             if (selectedResource === "text") {
                                                                 const packageData = unpackage(resourceText);
-                                                                setProcessingStep(1);
-                                                                const decryptedText = await decryptText(packageData.ciphertext, inputPassword, packageData.salt, packageData.iv, setProcessingStep);
+                                                                if ("wrappedKey" in packageData) {
+                                                                    const decryptedText = await decryptRsaText(packageData.ciphertext, packageData.wrappedKey, packageData.iv, privateKey, setProcessingStep);
+                                                                    setOperationResult(decryptedText);
+                                                                } else if (packageData.keyExchangeAlgorithm && packageData.senderPublicKey) {
+                                                                    const secret = await deriveSharedSecret(packageData.keyExchangeAlgorithm, exchangePrivateKey, packageData.senderPublicKey);
+                                                                    const decryptedText = await decryptText(packageData.ciphertext, secret, packageData.salt, packageData.iv, setProcessingStep, packageData.algorithm);
+                                                                    setOperationResult(decryptedText);
+                                                                } else {
+                                                                    setProcessingStep(1);
+                                                                    const decryptedText = await decryptText(packageData.ciphertext, inputPassword, packageData.salt, packageData.iv, setProcessingStep, packageData.algorithm);
 
-                                                                setProcessingStep(4);
-                                                                setOperationResult(decryptedText);
+                                                                    setProcessingStep(4);
+                                                                    setOperationResult(decryptedText);
+                                                                }
                                                             } else {
                                                                 if (!selectedFile) {
                                                                     setOperationError("Please provide an encrypted LockBox package.");
                                                                     return;
                                                                 }
                                                                 const encryptedPackage = await selectedFile.text();
+                                                                const packageData = unpackage(encryptedPackage.trim());
+                                                                if ("wrappedKey" in packageData) {
+                                                                    throw new CryptoError("INVALID_PACKAGE", "RSA encryption currently supports text resources only.");
+                                                                }
+                                                                const decryptionPassword = packageData.keyExchangeAlgorithm && packageData.senderPublicKey
+                                                                    ? await deriveSharedSecret(packageData.keyExchangeAlgorithm, exchangePrivateKey, packageData.senderPublicKey)
+                                                                    : inputPassword;
                                                                 setProcessingStep(1);
-                                                                const decryptedFile = await decryptFile(encryptedPackage.trim(), inputPassword, setProcessingStep);
+                                                                const decryptedFile = await decryptFile(encryptedPackage.trim(), decryptionPassword, setProcessingStep);
 
                                                                 setProcessingStep(4);
                                                                 setDecryptedFile(decryptedFile);
-                                                                setOperationResult(`Decrypted file: ${decryptedFile.name}`);
+                                                                if (packageData.resourceType === "folder") {
+                                                                    const summary = await inspectFolderArchive(decryptedFile, packageData.folderName);
+                                                                    setDecryptedFolderSummary(summary);
+                                                                    setOperationResult(`Restored folder: ${summary.folderName}`);
+                                                                } else {
+                                                                    setOperationResult(`Decrypted file: ${decryptedFile.name}`);
+                                                                }
                                                             }
                                                         }
 
@@ -972,10 +1266,25 @@ function App() {
                                                                     setOperationError("The password is incorrect or the encrypted resource has been modified");
                                                                     break;
                                                                 case "DECRYPTION_FAILED":
-                                                                    setOperationError("LockBox could not decrpyt this resource. Please try again.");
+                                                                    setOperationError("LockBox could not decrypt this resource. Please try again.");
                                                                     break;
                                                                 case "ENCRYPTION_FAILED":
                                                                     setOperationError("LockBox could not encrypt this resource. Please try again.");
+                                                                    break;
+                                                                case "EMPTY_FOLDER":
+                                                                    setOperationError("The selected folder is empty. Choose a folder containing at least one file.");
+                                                                    break;
+                                                                case "ARCHIVE_FAILED":
+                                                                    setOperationError("Some files could not be read, so the folder archive could not be created.");
+                                                                    break;
+                                                                case "ARCHIVE_CORRUPTED":
+                                                                    setOperationError("The folder archive is corrupted and could not be restored.");
+                                                                    break;
+                                                                case "EXTRACTION_FAILED":
+                                                                    setOperationError("The folder could not be extracted. Please try again.");
+                                                                    break;
+                                                                case "RESOURCE_TOO_LARGE":
+                                                                    setOperationError(error.message);
                                                                     break;
                                                                 default:
                                                                     setOperationError("The operation could not be completed.");
@@ -992,11 +1301,19 @@ function App() {
 
                                                 {mode === "encrypt" ? "Encrypt Resource" : "Decrypt Resource"}
                                             </button>
-                                            {!hasResource && (
+                                            {!hasResource ? (
                                                 <p className="action-reason" role="status">
                                                     {resourceRequirementMessage}
                                                 </p>
-                                            )}
+                                            ) : keyMaterialMissing ? (
+                                                <p className="action-reason" role="status">
+                                                    {selectedAlgorithmConfig?.operation === "key-exchange"
+                                                        ? mode === "encrypt"
+                                                            ? "Generate your key pair and enter the peer public key before encrypting."
+                                                            : "Generate or enter your private key before decrypting."
+                                                        : keyRequirementMessage}
+                                                </p>
+                                            ) : null}
                                         </>
                                     )}
                                 </>
@@ -1017,7 +1334,7 @@ function App() {
                             <i>→</i>
                             <span>KEY DERIVATION</span>
                             <i>→</i>
-                            <span>AES-256-GCM</span>
+                            <span>{selectedAlgorithm}</span>
                             <i>→</i>
                             <span>AUTHENTICATION</span>
                             <i>→</i>
@@ -1039,4 +1356,4 @@ export default App;
 
 // Add a feature to allow users to just lock their resource, not encrypt fully. Make it so that the user first picks  what they want, simple lock on their resource or full control of encryption on their resource. If they select lock, the modes become create lock and remove lock with no need to show the algorithms used, if they select encrypt, the modes become encrypt and decrypt.
 // Include a welcome/help feature to guide the user on how to work on the platform and decide which service they need and those they don't
-// Make the animation truthfull
+// For public key encryption, introduce fingerprint/digital signature to prevent man-in-the-middle attacks.
